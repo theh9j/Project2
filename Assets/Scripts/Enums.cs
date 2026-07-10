@@ -19,6 +19,13 @@ public enum ColorType {
     Beige,
     Gray,
     Black,
+
+    Invalid
+}
+
+public enum InputType {
+    Computer,
+    Mobile
 }
 
 public enum WaitingSlotState {

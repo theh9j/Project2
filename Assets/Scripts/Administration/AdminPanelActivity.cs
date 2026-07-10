@@ -5,7 +5,7 @@ public class AdminPanelActivity : MonoBehaviour
 {
     [SerializeField] private Button adminButton;
     [SerializeField] private GameObject canvas;
-    private bool activity;
+    public bool activity;
 
     void Awake() {
         activity = canvas.activeSelf;
