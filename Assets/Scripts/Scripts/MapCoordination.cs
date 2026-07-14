@@ -249,18 +249,16 @@ public class MapCoordination : MonoBehaviour {
     }
 
     public Dictionary<ColorType, int> GetPixelColorCount() {
-        if (pixels == null) return null;
+        if (pixels == null) return new Dictionary<ColorType, int>();
 
         Dictionary<ColorType, int> listOfPixel = new();
-        HashSet<ColorType> checkForNew = new();
         List<PixelView> pixelViews = pixels.ConvertAll(p => p.GetComponentInChildren<PixelView>());
 
         foreach (PixelView pixel in pixelViews) {
-            if (checkForNew.Add(pixel.Color)) {
-                listOfPixel[pixel.Color] = 1;
-                continue;
-            }
-            listOfPixel[pixel.Color]++;
+            if (pixel == null || pixel.Color == ColorType.None) continue;
+
+            listOfPixel.TryGetValue(pixel.Color, out int amount);
+            listOfPixel[pixel.Color] = amount + 1;
         }
 
         return listOfPixel;

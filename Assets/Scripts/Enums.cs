@@ -5,6 +5,13 @@ public enum EditorState {
     Drawing
 }
 
+public enum BoxAnimationState {
+    Enable,
+    Open,
+    Close,
+    Killed
+}
+
 public enum ColorType {
     Red,
     Green,

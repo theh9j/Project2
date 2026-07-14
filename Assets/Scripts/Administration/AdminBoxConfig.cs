@@ -9,17 +9,26 @@ using UnityEngine.UI;
 public class AdminBoxConfig : MonoBehaviour
 {
     [SerializeField] private AdministrationHandler handler;
+    [SerializeField] private BoxManagementSystem boxMana;
+
+    //INPUT
+    [SerializeField] private TMP_InputField amountInput;
 
     //BUTTONS
     [SerializeField] private Button deleteButton;
 
-
     //DROPDOWN
     [SerializeField] private TMP_Dropdown dropdown;
 
+    [Header("Aniimation")]
+    [SerializeField] private Button enable;
+    [SerializeField] private Button open;
+    [SerializeField] private Button close;
+    [SerializeField] private Button kill;
+
     //VARIABLES
     List<ColorType> listOfColorTypes = new();
-    [HideInInspector] public BoxConfiguration selectedBox;
+    [HideInInspector] public Box selectedBox;
 
     void Awake() {
         listOfColorTypes = Enum.GetValues(typeof(ColorType)).Cast<ColorType>().ToList();
@@ -27,13 +36,48 @@ public class AdminBoxConfig : MonoBehaviour
         dropdown.AddOptions(listOfColorTypes.ConvertAll(i => i.ToString()));
         dropdown.onValueChanged.AddListener(OnDropdownChange);
 
-        deleteButton.onClick.AddListener(Delete);
+        amountInput.onEndEdit.AddListener((value) => {
+            if (selectedBox == null) return;
+            if (int.TryParse(value, out int amount)) selectedBox.SetAmount(amount);
+        });
+
+        deleteButton.onClick.AddListener(() => {
+            if (selectedBox == null) return;
+            boxMana.Remove(selectedBox);
+            handler.Log();
+        });
+
+        enable.onClick.AddListener(() => {
+            if (selectedBox == null) return;
+            selectedBox.Animation(BoxAnimationState.Enable);
+        });
+
+        open.onClick.AddListener(() => {
+            if (selectedBox == null) return;
+            selectedBox.Animation(BoxAnimationState.Open);
+        });
+
+        close.onClick.AddListener(() => {
+            if (selectedBox == null) return;
+            selectedBox.Animation(BoxAnimationState.Close);
+        });
+
+        kill.onClick.AddListener(() => {
+            if (selectedBox == null) return;
+            selectedBox.Animation(BoxAnimationState.Killed);
+        });
     }
 
-    public void Init(BoxConfiguration box) {
+    public void Init(Box box) {
         if (selectedBox == box) return;
         selectedBox = box;
         selectedBox.SetOutline(Color.aquamarine);
+
+        for (int i = 0; i < dropdown.options.Count; i++) 
+            if (dropdown.options[i].ToString() == box.Color.ToString()) dropdown.value = i;
+        
+        amountInput.text = box.Amount.ToString();
+
     }
 
     public void Deselection() {
@@ -53,11 +97,6 @@ public class AdminBoxConfig : MonoBehaviour
         }
 
         selectedBox.ChangeColor(newColor);
-    }
-
-    private void Delete() {
-        if (selectedBox == null) return;
-        Destroy(selectedBox.gameObject);
-        gameObject.SetActive(false);
+        handler.Log();
     }
 }

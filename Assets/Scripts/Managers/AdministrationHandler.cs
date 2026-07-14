@@ -7,6 +7,7 @@ public class AdministrationHandler : MonoBehaviour
 
     [Header("References")]
     [SerializeField] private PixelColorWheel colorWheel;
+    [SerializeField] private BoxManagementSystem boxManager;
     [SerializeField] private ColorMissingLog colorLog;
     [SerializeField] private MapCoordination map;
     [SerializeField] private TMP_Text activeMode;
@@ -18,15 +19,22 @@ public class AdministrationHandler : MonoBehaviour
     [SerializeField] private GameObject artistPanel;
     [SerializeField] private AdminBoxConfig boxConfig;
 
+    [Header("Buttons")]
+    [SerializeField] private Button addBoxButton;
+
 
     public EditorState State { get; private set; } = EditorState.Basic;
 
 
     void Awake() {
+        //MODES
         drawMode.onClick.AddListener(() => ChangeMode(EditorState.Drawing));
 
-
-
+        //FUNCTIONS
+        addBoxButton.onClick.AddListener(() => {
+            boxManager.Add();
+            Log();
+        });
 
     }
 
@@ -59,15 +67,16 @@ public class AdministrationHandler : MonoBehaviour
 
         pixel.ChangeColor(colorWheel.Brush);
 
+        Log();
+    }
 
-        //WIP
-        colorLog.LogColors(map.GetPixelColorCount());
+    public void Log() {
+        colorLog.LogProcess(map.GetPixelColorCount(), boxManager.BoxList);
     }
 
 
-
     //BOX CONFIGURATION
-    public void SetBox(BoxConfiguration box) {
+    public void SetBox(Box box) {
         if (box == null) return;
         boxConfig.gameObject.SetActive(true);
         boxConfig.Init(box);

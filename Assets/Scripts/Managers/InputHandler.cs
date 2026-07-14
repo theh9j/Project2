@@ -9,8 +9,11 @@ public class InputHandler : MonoBehaviour
     public static InputHandler Instance { get; private set; }
     [SerializeField] private AdministrationHandler administration;
 
-    private readonly List<RaycastResult> uiRaycastResults = new();
+    [Min(0f)]
+    [SerializeField] private float inputDelay = 0f;
 
+    private readonly List<RaycastResult> uiRaycastResults = new();
+    private float t = 0f;
     void Awake() {
         if (Instance != null && Instance != this) {
             Destroy(gameObject);
@@ -21,11 +24,17 @@ public class InputHandler : MonoBehaviour
     }
 
     void Update() {
+        t += Time.deltaTime;
+
+        if (t < inputDelay) return;
+
         switch (administration.State) {
                 case EditorState.Basic:
                     if ((Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame) ||
-                        (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame))
+                        (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame)) {
+                        t = 0f;
                         InputProcess();
+                    }
                     break;  
                 case EditorState.Drawing:
                     if ((Mouse.current != null && Mouse.current.leftButton.isPressed))
@@ -79,7 +88,14 @@ public class InputHandler : MonoBehaviour
     }
 
     private void InputProcess() {
-        RaycastHit2D hit = Physics2D.Raycast(PointerDirection(), Vector3.zero);
+        if (!TryGetPointerPosition(out Vector2 screenPos)) return;
+        if (IsPointerOverUI(screenPos)) return;
+
+        Camera mainCamera = Camera.main;
+        if (mainCamera == null) return;
+
+        Vector3 worldPos = mainCamera.ScreenToWorldPoint(screenPos);
+        RaycastHit2D hit = Physics2D.Raycast(worldPos, Vector3.zero);
 
 #if UNITY_EDITOR
         if (administration != null && administration.gameObject.activeSelf) {
@@ -106,7 +122,7 @@ public class InputHandler : MonoBehaviour
 
     private void AdministrationInput(RaycastHit2D hit) {
 
-        BoxConfiguration box = hit.collider.GetComponent<BoxConfiguration>();
+        Box box = hit.collider.GetComponent<Box>();
         if (box != null) {
             administration.ResetConfig();
             administration.SetBox(box);
