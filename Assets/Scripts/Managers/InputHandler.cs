@@ -21,9 +21,17 @@ public class InputHandler : MonoBehaviour
     }
 
     void Update() {
-        if ((Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame) ||
-            (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame)) 
-            InputProcess();
+        switch (administration.State) {
+                case EditorState.Basic:
+                    if ((Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame) ||
+                        (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame))
+                        InputProcess();
+                    break;  
+                case EditorState.Drawing:
+                    if ((Mouse.current != null && Mouse.current.leftButton.isPressed))
+                        Drawing();
+                    break;
+            }
     }
 
     private bool IsPointerOverUI(Vector2 screenPos) {
@@ -60,15 +68,18 @@ public class InputHandler : MonoBehaviour
         return false;
     }
 
-    private void InputProcess() {
-        if (!TryGetPointerPosition(out Vector2 screenPos)) return;
-        if (IsPointerOverUI(screenPos)) return;
+    private Vector3 PointerDirection() {
+        if (!TryGetPointerPosition(out Vector2 screenPos)) return Vector3.zero;
+        if (IsPointerOverUI(screenPos)) return Vector3.zero;
 
         Camera mainCamera = Camera.main;
-        if (mainCamera == null) return;
+        if (mainCamera == null) return Vector3.zero;
+        
+        return mainCamera.ScreenToWorldPoint(screenPos);
+    }
 
-        Vector2 worldPos = mainCamera.ScreenToWorldPoint(screenPos);
-        RaycastHit2D hit = Physics2D.Raycast(worldPos, Vector2.zero);
+    private void InputProcess() {
+        RaycastHit2D hit = Physics2D.Raycast(PointerDirection(), Vector3.zero);
 
 #if UNITY_EDITOR
         if (administration != null && administration.gameObject.activeSelf) {
@@ -100,9 +111,29 @@ public class InputHandler : MonoBehaviour
             administration.ResetConfig();
             administration.SetBox(box);
         }
-
-
-
-        
     }
+
+    private void Drawing() {
+#if !UNITY_EDITOR
+        administration.ChangeMode(EditorState.Basic);
+        Debug.Log("User not authorized");
+        return;
+#endif
+        if (administration == null) return;
+
+        Vector2 worldPosition = PointerDirection();
+
+        Collider2D hitCollider = Physics2D.OverlapPoint(worldPosition);
+
+        if (hitCollider == null) {
+            return;
+        }
+
+        if (!hitCollider.TryGetComponent(out PixelView pixel)) {
+            return;
+        }
+
+        administration.Draw(pixel);
+    }
+
 }

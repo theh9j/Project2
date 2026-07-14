@@ -1,5 +1,10 @@
 using UnityEngine;
 
+public enum EditorState {
+    Basic,
+    Drawing
+}
+
 public enum ColorType {
     Red,
     Green,
@@ -20,6 +25,7 @@ public enum ColorType {
     Gray,
     Black,
 
+    None,
     Invalid
 }
 
