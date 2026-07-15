@@ -8,12 +8,16 @@ public class InputHandler : MonoBehaviour
 {
     public static InputHandler Instance { get; private set; }
     [SerializeField] private AdministrationHandler administration;
+    [SerializeField] private BoxManagementSystem boxManager;
+    [SerializeField] private WaitingSlotsManagementSystem waitManager;
 
     [Min(0f)]
     [SerializeField] private float inputDelay = 0f;
 
     private readonly List<RaycastResult> uiRaycastResults = new();
     private float t = 0f;
+    private Box clickedBox;
+
     void Awake() {
         if (Instance != null && Instance != this) {
             Destroy(gameObject);
@@ -24,6 +28,15 @@ public class InputHandler : MonoBehaviour
     }
 
     void Update() {
+#if UNITY_EDITOR
+        float scroll = Mouse.current != null && 
+            (Keyboard.current != null && Keyboard.current[Key.LeftCtrl].isPressed) ? 
+            Mouse.current.scroll.ReadValue().y : 0;
+
+        if (scroll > 0f) boxManager.Scroll(true);
+        else if (scroll < 0f) boxManager.Scroll(false);
+#endif
+
         t += Time.deltaTime;
 
         if (t < inputDelay) return;
@@ -33,8 +46,15 @@ public class InputHandler : MonoBehaviour
                     if ((Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame) ||
                         (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame)) {
                         t = 0f;
-                        InputProcess();
+                        InputPressProcess();
                     }
+
+                    if ((Mouse.current != null && Mouse.current.leftButton.wasReleasedThisFrame) ||
+                        (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasReleasedThisFrame)) {
+                        t = 0f;
+                        InputReleaseProcess();
+                    }
+                
                     break;  
                 case EditorState.Drawing:
                     if ((Mouse.current != null && Mouse.current.leftButton.isPressed))
@@ -87,7 +107,35 @@ public class InputHandler : MonoBehaviour
         return mainCamera.ScreenToWorldPoint(screenPos);
     }
 
-    private void InputProcess() {
+    private void InputReleaseProcess() {
+        if (!TryGetPointerPosition(out Vector2 screenPos)) return;
+        if (IsPointerOverUI(screenPos)) return;
+
+        Camera mainCamera = Camera.main;
+        if (mainCamera == null) return;
+
+        Vector3 worldPos = mainCamera.ScreenToWorldPoint(screenPos);
+        RaycastHit2D hit = Physics2D.Raycast(worldPos, Vector3.zero);
+        clickedBox?.OnPress(false);
+        clickedBox = null;
+
+#if UNITY_EDITOR
+        if (administration != null && administration.gameObject.activeSelf) return;
+#endif
+
+
+        if (hit.collider == null) {
+            return;
+        }
+
+        Box box = hit.collider.GetComponent<Box>();
+        if (box != null && box.Interactable) {
+            if (waitManager.AddBoxToAvailablePlate(box))
+                boxManager.RemoveBox(box);
+        }
+    }
+
+    private void InputPressProcess() {
         if (!TryGetPointerPosition(out Vector2 screenPos)) return;
         if (IsPointerOverUI(screenPos)) return;
 
@@ -97,9 +145,10 @@ public class InputHandler : MonoBehaviour
         Vector3 worldPos = mainCamera.ScreenToWorldPoint(screenPos);
         RaycastHit2D hit = Physics2D.Raycast(worldPos, Vector3.zero);
 
+
 #if UNITY_EDITOR
         if (administration != null && administration.gameObject.activeSelf) {
-            if (hit.collider == null) { 
+            if (hit.collider == null) {
                 administration.ResetConfig();
                 return;
             }
@@ -113,12 +162,13 @@ public class InputHandler : MonoBehaviour
             return;
         }
 
+        Box box = hit.collider.GetComponent<Box>();
+        if (box != null && box.Interactable) {
+            clickedBox = box;
+            clickedBox.OnPress(true);
+        }
 
-
-
-        //INPUT PROCESSING
     }
-
 
     private void AdministrationInput(RaycastHit2D hit) {
 

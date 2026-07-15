@@ -7,7 +7,9 @@ public class PixelView : MonoBehaviour
 
     [SerializeField] private ColorData colorData;
     private MaterialPropertyBlock material;
-    public ColorType Color { get; private set;  }
+    public ColorType Color { get; private set; }
+    public bool wait = false;
+    public bool pickedUp = false;
 
     void Awake() {
         if (render == null) {
@@ -22,6 +24,7 @@ public class PixelView : MonoBehaviour
         ChangeColor(ColorType.Beige);
 
     }
+
     public void ChangeColor(ColorType color) {
         if (material == null || render == null || colorData == null) return;
         this.Color = color;

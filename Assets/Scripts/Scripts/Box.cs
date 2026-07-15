@@ -1,3 +1,5 @@
+using DG.Tweening;
+using System;
 using System.Collections;
 using TMPro;
 using UnityEngine;
@@ -19,11 +21,15 @@ public class Box : MonoBehaviour
     private MaterialPropertyBlock mouthMaterial;
 
     [Header("Box position")]
-    public int ColIndex { get; private set; }
-    public int RowIndex { get; private set; }
+    public int ColIndex { get; private set; } = 1000;
+    public int RowIndex { get; private set; } = 1000;
+    public bool Interactable => RowIndex == 0;
+    public event Action<Box> Finished;
 
+    [Header("Box's properties")]
+    public bool canRelease;
+    public Box Link { get; private set; }
 
-    //BOX DETAILS
     public ColorType Color { get; private set; } = ColorType.White;
     [field: SerializeField, Min(0)] public int Amount { get; private set; } = 20;
 
@@ -52,27 +58,6 @@ public class Box : MonoBehaviour
 
     public void Decrease(int amount) {
         SetAmount(Mathf.Max(0, Amount - amount));
-    }
-
-    public void Animation(BoxAnimationState state) {
-        switch (state) {
-            case BoxAnimationState.Enable:
-                SetOutline();
-                anim.SetTrigger("TopRow");
-                break;
-            case BoxAnimationState.Open:
-                DisableOutline();
-                anim.SetTrigger("OnWait");
-                break;
-            case BoxAnimationState.Close:
-                DisableOutline();
-                anim.SetTrigger("Complete");
-                break;
-            case BoxAnimationState.Killed:
-                DisableOutline();
-                anim.SetTrigger("Killed");
-                break;
-        }
     }
 
     public void ChangeColor(ColorType color) {
@@ -106,8 +91,47 @@ public class Box : MonoBehaviour
     }
 
     public void SetGridPosition(int x, int y) {
+        if (!Interactable && y == 0) Animation(BoxAnimationState.Enable);
         ColIndex = x;
         RowIndex = y;
     }
 
+    public void OnPress(bool press) {
+        if (press) {
+            transform.DOScale(
+                new Vector3(1.1f, 1.1f, 1f),
+                .1f
+                );
+        } else {
+            transform.DOScale(
+                new Vector3(1f, 1f, 1f),
+                .1f
+                );
+        }
+    }
+
+    public void OnComplete() {
+        Finished?.Invoke(this);
+    }
+
+    public void Animation(BoxAnimationState state) {
+        switch (state) {
+            case BoxAnimationState.Enable:
+                SetOutline();
+                anim.SetTrigger("TopRow");
+                break;
+            case BoxAnimationState.Open:
+                DisableOutline();
+                anim.SetTrigger("OnWait");
+                break;
+            case BoxAnimationState.Close:
+                DisableOutline();
+                anim.SetTrigger("Complete");
+                break;
+            case BoxAnimationState.Killed:
+                DisableOutline();
+                anim.SetTrigger("Killed");
+                break;
+        }
+    }
 }

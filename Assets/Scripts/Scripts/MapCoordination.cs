@@ -263,4 +263,90 @@ public class MapCoordination : MonoBehaviour {
 
         return listOfPixel;
     }
+    public List<PixelView> ExposedPixels {
+        get {
+            List<PixelView> exposedPixels = new();
+            if (columns <= 0 || rows <= 0) return exposedPixels;
+
+            bool[,] reachableEmpty = GetOutsideReachableEmptyPixels();
+            for (int y = 0; y < rows; y++) {
+                for (int x = 0; x < columns; x++) {
+                    PixelView pixel = GetPixel(x, y);
+                    if (pixel == null || pixel.Color == ColorType.None) continue;
+
+                    if (IsExposed(x, y, reachableEmpty)) {
+                        exposedPixels.Add(pixel);
+                    }
+                }
+            }
+
+            return exposedPixels;
+        }
+    }
+
+    private PixelView GetPixel(int x, int y) {
+        if (x < 0 || x >= columns || y < 0 || y >= rows) return null;
+
+        int index = y * columns + x;
+        if (index < 0 || index >= pixels.Count) return null;
+        if (pixels[index] == null) return null;
+
+        return pixels[index].GetComponentInChildren<PixelView>();
+    }
+
+    private bool IsExposed(int x, int y, bool[,] reachableEmpty) {
+        return IsOutsideReachableEmpty(x, y - 1, reachableEmpty) ||
+               IsOutsideReachableEmpty(x + 1, y, reachableEmpty) ||
+               IsOutsideReachableEmpty(x, y + 1, reachableEmpty) ||
+               IsOutsideReachableEmpty(x - 1, y, reachableEmpty);
+    }
+
+    private bool IsOutsideReachableEmpty(int x, int y, bool[,] reachableEmpty) {
+        if (x < 0 || x >= columns || y < 0 || y >= rows) return true;
+        return reachableEmpty[x, y];
+    }
+
+    private bool[,] GetOutsideReachableEmptyPixels() {
+        bool[,] reachableEmpty = new bool[columns, rows];
+        Queue<Vector2Int> search = new();
+
+        for (int x = 0; x < columns; x++) {
+            TryAddEmptyPixel(x, 0, reachableEmpty, search);
+            TryAddEmptyPixel(x, rows - 1, reachableEmpty, search);
+        }
+
+        for (int y = 0; y < rows; y++) {
+            TryAddEmptyPixel(0, y, reachableEmpty, search);
+            TryAddEmptyPixel(columns - 1, y, reachableEmpty, search);
+        }
+
+        while (search.Count > 0) {
+            Vector2Int current = search.Dequeue();
+
+            TryAddEmptyPixel(current.x, current.y - 1, reachableEmpty, search);
+            TryAddEmptyPixel(current.x + 1, current.y, reachableEmpty, search);
+            TryAddEmptyPixel(current.x, current.y + 1, reachableEmpty, search);
+            TryAddEmptyPixel(current.x - 1, current.y, reachableEmpty, search);
+        }
+
+        return reachableEmpty;
+    }
+
+    private void TryAddEmptyPixel(
+        int x,
+        int y,
+        bool[,] reachableEmpty,
+        Queue<Vector2Int> search) {
+        if (x < 0 || x >= columns || y < 0 || y >= rows) return;
+        if (reachableEmpty[x, y]) return;
+        if (HasVisiblePixel(x, y)) return;
+
+        reachableEmpty[x, y] = true;
+        search.Enqueue(new Vector2Int(x, y));
+    }
+
+    private bool HasVisiblePixel(int x, int y) {
+        PixelView pixel = GetPixel(x, y);
+        return pixel != null && pixel.Color != ColorType.None;
+    }
 }

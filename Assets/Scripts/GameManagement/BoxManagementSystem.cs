@@ -1,12 +1,11 @@
 using DG.Tweening;
-using NUnit.Framework;
+using System.Collections;
 using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEngine;
 
 public class BoxManagementSystem : MonoBehaviour
 {
-    private const int MAX = 4;
+    private const int MAX = 5;
 
     [Header("Settings")]
     [SerializeField] private float moveSpeed = 0.01f;
@@ -21,7 +20,8 @@ public class BoxManagementSystem : MonoBehaviour
 
     [Min(1)]
     [SerializeField] private float scrollRowsPerStep = 1f;
-    private int rowScrollOffset;
+    private float rowScrollOffset;
+    private bool refreshQueued;
 
     void Awake() {
         for (int i = 0; i < MAX; i++) {
@@ -33,6 +33,7 @@ public class BoxManagementSystem : MonoBehaviour
         if (box == null) return;
 
         RemoveBox(box);
+        box.transform.DOKill();
         Destroy(box.gameObject);
     }
 
@@ -57,18 +58,34 @@ public class BoxManagementSystem : MonoBehaviour
 
         box.transform.SetParent(boxParent, false);
         box.SetCol(colIndex);
+        box.Finished += (value) => {
+            Remove(value);
+        };
 
         RefreshLayout();
     }
 
-    private void RemoveBox(Box box) {
+    public void RemoveBox(Box box) {
         if (box == null) return;
+        box.SetGridPosition(1000, 1000); // fall back
 
         for (int i = 0; i < MAX; i++) {
             if (!boxes[i].Remove(box)) continue;
 
-            RefreshLayout();
+            QueueRefreshLayout();
             return;
+        }
+    }
+
+    public void RemoveBoxesOfCertainColor(ColorType color) {
+        List<Box> boxOfColor = new();
+        foreach (Box box in BoxList) {
+            if (box.Color == color)
+                boxOfColor.Add(box);
+        }
+
+        foreach (Box box in boxOfColor) {
+            box.Animation(BoxAnimationState.Killed);
         }
     }
 
@@ -116,6 +133,7 @@ public class BoxManagementSystem : MonoBehaviour
 
             float yPos = -(i - rowScrollOffset) * ySpacing;
 
+            box.transform.DOKill();
             box.transform.DOLocalMove(
                 new Vector3(xPos, yPos, 0f),
                 moveSpeed
@@ -175,4 +193,56 @@ public class BoxManagementSystem : MonoBehaviour
         }
     }
 
+    public void Scroll(bool up) {
+        int upward = up ? 1 : -1;
+        rowScrollOffset += scrollRowsPerStep * upward;
+        ClampScrollOffset();
+
+        RefreshLayout();
+    }
+
+    public void SetScrollRow(int row) {
+        rowScrollOffset = Mathf.Max(0, row);
+        ClampScrollOffset();
+
+        RefreshLayout();
+    }
+
+    public void ResetScroll() {
+        rowScrollOffset = 0;
+        RefreshLayout();
+    }
+
+    private void ClampScrollOffset() {
+        int largestRowCount = 0;
+        for (int i = 0; i < MAX; i++) {
+            largestRowCount = Mathf.Max(
+                largestRowCount,
+                boxes[i].Count
+                );
+        }
+
+        int maxOffset = Mathf.Max(
+            0,
+            largestRowCount - 1);
+
+        rowScrollOffset = Mathf.Clamp(
+            rowScrollOffset,
+            0,
+            maxOffset);
+    }
+
+    private void QueueRefreshLayout() {
+        if (refreshQueued) return;
+
+        refreshQueued = true;
+        StartCoroutine(RefreshLayoutAtEndOfFrame());
+    }
+
+    private IEnumerator RefreshLayoutAtEndOfFrame() {
+        yield return null;
+
+        refreshQueued = false;
+        RefreshLayout();
+    }
 }

@@ -181,83 +181,41 @@ public class Outline : MonoBehaviour {
 
     // Retrieve or generate smooth normals
     foreach (var meshFilter in GetComponentsInChildren<MeshFilter>()) {
-      var mesh = GetWritableMesh(meshFilter);
-      if (mesh == null || !mesh.isReadable) {
-        continue;
-      }
 
       // Skip if smooth normals have already been adopted
-      if (!registeredMeshes.Add(mesh)) {
+      if (!registeredMeshes.Add(meshFilter.sharedMesh)) {
         continue;
       }
 
       // Retrieve or generate smooth normals
-      var index = bakeKeys.IndexOf(mesh);
-      var smoothNormals = (index >= 0) ? bakeValues[index].data : SmoothNormals(mesh);
+      var index = bakeKeys.IndexOf(meshFilter.sharedMesh);
+      var smoothNormals = (index >= 0) ? bakeValues[index].data : SmoothNormals(meshFilter.sharedMesh);
 
       // Store smooth normals in UV3
-      mesh.SetUVs(3, smoothNormals);
+      meshFilter.sharedMesh.SetUVs(3, smoothNormals);
 
       // Combine submeshes
       var renderer = meshFilter.GetComponent<Renderer>();
 
       if (renderer != null) {
-        CombineSubmeshes(mesh, renderer.sharedMaterials);
+        CombineSubmeshes(meshFilter.sharedMesh, renderer.sharedMaterials);
       }
     }
 
     // Clear UV3 on skinned mesh renderers
     foreach (var skinnedMeshRenderer in GetComponentsInChildren<SkinnedMeshRenderer>()) {
-      var mesh = GetWritableMesh(skinnedMeshRenderer);
-      if (mesh == null || !mesh.isReadable) {
-        continue;
-      }
 
       // Skip if UV3 has already been reset
-      if (!registeredMeshes.Add(mesh)) {
+      if (!registeredMeshes.Add(skinnedMeshRenderer.sharedMesh)) {
         continue;
       }
 
       // Clear UV3
-      mesh.uv4 = new Vector2[mesh.vertexCount];
+      skinnedMeshRenderer.sharedMesh.uv4 = new Vector2[skinnedMeshRenderer.sharedMesh.vertexCount];
 
       // Combine submeshes
-      CombineSubmeshes(mesh, skinnedMeshRenderer.sharedMaterials);
+      CombineSubmeshes(skinnedMeshRenderer.sharedMesh, skinnedMeshRenderer.sharedMaterials);
     }
-  }
-
-  Mesh GetWritableMesh(MeshFilter meshFilter) {
-    var mesh = meshFilter.sharedMesh;
-    if (mesh == null) {
-      return null;
-    }
-
-    if (mesh.isReadable) {
-      return mesh;
-    }
-
-    var meshInstance = Instantiate(mesh);
-    meshInstance.name = mesh.name + " (Outline Instance)";
-    meshFilter.sharedMesh = meshInstance;
-
-    return meshInstance;
-  }
-
-  Mesh GetWritableMesh(SkinnedMeshRenderer skinnedMeshRenderer) {
-    var mesh = skinnedMeshRenderer.sharedMesh;
-    if (mesh == null) {
-      return null;
-    }
-
-    if (mesh.isReadable) {
-      return mesh;
-    }
-
-    var meshInstance = Instantiate(mesh);
-    meshInstance.name = mesh.name + " (Outline Instance)";
-    skinnedMeshRenderer.sharedMesh = meshInstance;
-
-    return meshInstance;
   }
 
   List<Vector3> SmoothNormals(Mesh mesh) {

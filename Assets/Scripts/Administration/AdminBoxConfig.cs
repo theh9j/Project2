@@ -10,12 +10,15 @@ public class AdminBoxConfig : MonoBehaviour
 {
     [SerializeField] private AdministrationHandler handler;
     [SerializeField] private BoxManagementSystem boxMana;
+    [SerializeField] private WaitingSlotsManagementSystem waitingSlots;
+
 
     //INPUT
     [SerializeField] private TMP_InputField amountInput;
 
     //BUTTONS
     [SerializeField] private Button deleteButton;
+    [SerializeField] private Button addToPlate;
 
     //DROPDOWN
     [SerializeField] private TMP_Dropdown dropdown;
@@ -45,6 +48,12 @@ public class AdminBoxConfig : MonoBehaviour
             if (selectedBox == null) return;
             boxMana.Remove(selectedBox);
             handler.Log();
+        });
+
+        addToPlate.onClick.AddListener(() => {
+            if (selectedBox == null) return;
+            if (waitingSlots.AddBoxToAvailablePlate(selectedBox))
+                boxMana.RemoveBox(selectedBox);
         });
 
         enable.onClick.AddListener(() => {

@@ -1,4 +1,5 @@
 using TMPro;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -8,6 +9,7 @@ public class AdministrationHandler : MonoBehaviour
     [Header("References")]
     [SerializeField] private PixelColorWheel colorWheel;
     [SerializeField] private BoxManagementSystem boxManager;
+    [SerializeField] private WaitingSlotsManagementSystem waitManager;
     [SerializeField] private ColorMissingLog colorLog;
     [SerializeField] private MapCoordination map;
     [SerializeField] private TMP_Text activeMode;
@@ -21,6 +23,7 @@ public class AdministrationHandler : MonoBehaviour
 
     [Header("Buttons")]
     [SerializeField] private Button addBoxButton;
+    [SerializeField] private Button deleteColorBoxButton; //testing only
 
 
     public EditorState State { get; private set; } = EditorState.Basic;
@@ -30,6 +33,11 @@ public class AdministrationHandler : MonoBehaviour
         //MODES
         drawMode.onClick.AddListener(() => ChangeMode(EditorState.Drawing));
 
+        deleteColorBoxButton.onClick.AddListener(() => {
+            boxManager.RemoveBoxesOfCertainColor(ColorType.White);
+            waitManager.RemoveBoxesOfCertainColor(ColorType.White);
+        });
+
         //FUNCTIONS
         addBoxButton.onClick.AddListener(() => {
             boxManager.Add();
@@ -37,8 +45,6 @@ public class AdministrationHandler : MonoBehaviour
         });
 
     }
-
-
 
     //MODE CONFIGS
     public void ChangeMode(EditorState state) {
@@ -81,6 +87,8 @@ public class AdministrationHandler : MonoBehaviour
         boxConfig.gameObject.SetActive(true);
         boxConfig.Init(box);
     }
+
+
 
 
     //COMMONS
