@@ -4,6 +4,7 @@ using UnityEngine;
 public class MapCoordination : MonoBehaviour {
     [Header("UI Frame")]
     [SerializeField] private RectTransform frame;
+    [SerializeField] private RectTransform hole;
     [SerializeField] private Canvas frameCanvas;
 
     [Header("World")]
@@ -209,6 +210,9 @@ public class MapCoordination : MonoBehaviour {
                     pixel.AddComponent<PixelView>();
                 }
 
+                PixelView pixelView = pixel.GetComponent<PixelView>();
+                pixelView.SetGridPosition(x, y);
+
                 pixels.Add(pixel);
             }
         }
@@ -284,7 +288,7 @@ public class MapCoordination : MonoBehaviour {
         }
     }
 
-    private PixelView GetPixel(int x, int y) {
+    public PixelView GetPixel(int x, int y) {
         if (x < 0 || x >= columns || y < 0 || y >= rows) return null;
 
         int index = y * columns + x;
@@ -348,5 +352,193 @@ public class MapCoordination : MonoBehaviour {
     private bool HasVisiblePixel(int x, int y) {
         PixelView pixel = GetPixel(x, y);
         return pixel != null && pixel.Color != ColorType.None;
+    }
+
+    public bool TryGetOpening(
+        PixelView target,
+        out TraySide side,
+        out Vector3 openingPosition) {
+        side = TraySide.Bottom;
+        openingPosition = Vector3.zero;
+
+        if (target == null || columns <= 0 || rows <= 0) return false;
+
+        Vector2Int targetGrid = target.GridPosition;
+        int[,] distances = new int[columns, rows];
+        TraySide[,] sides = new TraySide[columns, rows];
+        Vector2Int[,] openings = new Vector2Int[columns, rows];
+        Queue<Vector2Int> search = new();
+
+        for (int x = 0; x < columns; x++) {
+            TrySeedOpening(x, rows - 1, TraySide.Bottom, distances, sides, openings, search);
+            TrySeedOpening(x, 0, TraySide.Top, distances, sides, openings, search);
+        }
+
+        for (int y = 0; y < rows; y++) {
+            TrySeedOpening(0, y, TraySide.Left, distances, sides, openings, search);
+            TrySeedOpening(columns - 1, y, TraySide.Right, distances, sides, openings, search);
+        }
+
+        while (search.Count > 0) {
+            Vector2Int current = search.Dequeue();
+            TrySpreadOpening(current, current.x, current.y - 1, distances, sides, openings, search);
+            TrySpreadOpening(current, current.x + 1, current.y, distances, sides, openings, search);
+            TrySpreadOpening(current, current.x, current.y + 1, distances, sides, openings, search);
+            TrySpreadOpening(current, current.x - 1, current.y, distances, sides, openings, search);
+        }
+
+        if (TryGetDirectBoundaryOpening(targetGrid, out side, out Vector2Int directOpening)) {
+            openingPosition = GetPixel(directOpening.x, directOpening.y).transform.position;
+            return true;
+        }
+
+        int bestDistance = int.MaxValue;
+        Vector2Int bestOpening = targetGrid;
+        Vector2Int[] neighbours = {
+            new(targetGrid.x, targetGrid.y - 1),
+            new(targetGrid.x + 1, targetGrid.y),
+            new(targetGrid.x, targetGrid.y + 1),
+            new(targetGrid.x - 1, targetGrid.y)
+        };
+
+        foreach (Vector2Int neighbour in neighbours) {
+            if (neighbour.x < 0 || neighbour.x >= columns ||
+                neighbour.y < 0 || neighbour.y >= rows) continue;
+
+            int distance = distances[neighbour.x, neighbour.y];
+            if (distance <= 0 || distance >= bestDistance) continue;
+
+            bestDistance = distance;
+            side = sides[neighbour.x, neighbour.y];
+            bestOpening = openings[neighbour.x, neighbour.y];
+        }
+
+        if (bestDistance == int.MaxValue) return false;
+
+        PixelView openingPixel = GetPixel(bestOpening.x, bestOpening.y);
+        if (openingPixel == null) return false;
+
+        openingPosition = openingPixel.transform.position;
+        return true;
+    }
+
+    public bool TryGetGridWorldBounds(out Bounds bounds) {
+        bounds = new Bounds();
+        bool hasPixel = false;
+
+        foreach (GameObject pixel in pixels) {
+            if (pixel == null) continue;
+
+            if (!hasPixel) {
+                bounds = new Bounds(pixel.transform.position, Vector3.zero);
+                hasPixel = true;
+            } else {
+                bounds.Encapsulate(pixel.transform.position);
+            }
+        }
+
+        if (!hasPixel) return false;
+
+        bounds.Expand(new Vector3(pixelSize, pixelSize, 0f));
+        return true;
+    }
+
+    public bool TryGetHoleWorldBounds(out Bounds bounds) {
+        bounds = new Bounds();
+        if (hole == null) return false;
+
+        return TryGetRectWorldBounds(hole, out bounds);
+    }
+
+    private void TrySeedOpening(
+        int x,
+        int y,
+        TraySide side,
+        int[,] distances,
+        TraySide[,] sides,
+        Vector2Int[,] openings,
+        Queue<Vector2Int> search) {
+        if (x < 0 || x >= columns || y < 0 || y >= rows) return;
+        if (distances[x, y] != 0 || HasVisiblePixel(x, y)) return;
+
+        distances[x, y] = 1;
+        sides[x, y] = side;
+        openings[x, y] = new Vector2Int(x, y);
+        search.Enqueue(new Vector2Int(x, y));
+    }
+
+    private void TrySpreadOpening(
+        Vector2Int source,
+        int x,
+        int y,
+        int[,] distances,
+        TraySide[,] sides,
+        Vector2Int[,] openings,
+        Queue<Vector2Int> search) {
+        if (x < 0 || x >= columns || y < 0 || y >= rows) return;
+        if (distances[x, y] != 0 || HasVisiblePixel(x, y)) return;
+
+        distances[x, y] = distances[source.x, source.y] + 1;
+        sides[x, y] = sides[source.x, source.y];
+        openings[x, y] = openings[source.x, source.y];
+        search.Enqueue(new Vector2Int(x, y));
+    }
+
+    private bool TryGetDirectBoundaryOpening(
+        Vector2Int grid,
+        out TraySide side,
+        out Vector2Int opening) {
+        opening = grid;
+
+        if (grid.y == rows - 1) {
+            side = TraySide.Bottom;
+            return true;
+        }
+        if (grid.x == 0) {
+            side = TraySide.Left;
+            return true;
+        }
+        if (grid.x == columns - 1) {
+            side = TraySide.Right;
+            return true;
+        }
+        if (grid.y == 0) {
+            side = TraySide.Top;
+            return true;
+        }
+
+        side = TraySide.Bottom;
+        return false;
+    }
+
+    private bool TryGetRectWorldBounds(RectTransform rect, out Bounds bounds) {
+        bounds = new Bounds();
+        rect.GetWorldCorners(frameCorners);
+
+        Camera canvasCamera =
+            frameCanvas.renderMode == RenderMode.ScreenSpaceOverlay
+                ? null
+                : frameCanvas.worldCamera;
+
+        Quaternion layoutRotation = GetLayoutRotation();
+        Vector3 layoutNormal = layoutRotation * Vector3.forward;
+        Plane mapPlane = new(layoutNormal, transform.position);
+        bool hasCorner = false;
+
+        foreach (Vector3 corner in frameCorners) {
+            Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(canvasCamera, corner);
+            Ray ray = worldCamera.ScreenPointToRay(screenPoint);
+            if (!mapPlane.Raycast(ray, out float distance)) return false;
+
+            Vector3 worldPoint = ray.GetPoint(distance);
+            if (!hasCorner) {
+                bounds = new Bounds(worldPoint, Vector3.zero);
+                hasCorner = true;
+            } else {
+                bounds.Encapsulate(worldPoint);
+            }
+        }
+
+        return hasCorner;
     }
 }

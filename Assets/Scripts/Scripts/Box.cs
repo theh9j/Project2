@@ -4,9 +4,8 @@ using System.Collections;
 using TMPro;
 using UnityEngine;
 
-public class Box : MonoBehaviour
+public partial class Box : MonoBehaviour
 {
-    [SerializeField] private ColorData colorData;
     [SerializeField] private TMP_Text text;
     [SerializeField] private Outline outline;
 
@@ -27,32 +26,33 @@ public class Box : MonoBehaviour
     public event Action<Box> Finished;
 
     [Header("Box's properties")]
-    public bool canRelease;
     public Box Link { get; private set; }
-
     public ColorType Color { get; private set; } = ColorType.White;
     [field: SerializeField, Min(0)] public int Amount { get; private set; } = 20;
+    private UnityEngine.Color boxVisualColor = UnityEngine.Color.white;
 
     void Awake() {
+        antNest = GameObject.FindWithTag("Nest").transform;
+
         boxMaterial = new MaterialPropertyBlock();
         mouthMaterial = new MaterialPropertyBlock();
-        if (colorData == null) {
-            colorData = ColorData.LoadDefault();
-        }
         outline.enabled = false;
     }
 
     void Start() {
-        ChangeColor(ColorType.White);
+        ChangeColor(ColorType.Beige, UnityEngine.Color.beige);
         SetAmount(Amount);
     }
 
     public void SetAmount(int amount) {
         if (amount < 0) return;
+        if (amount == 0)
+            Animation(BoxAnimationState.Close);
+        
 
         Amount = Mathf.Min(amount, 100);
         if (text != null) {
-            text.text = Amount.ToString();
+            text.text = Amount > 0 ? Amount.ToString() : "";
         }
     }
 
@@ -60,17 +60,17 @@ public class Box : MonoBehaviour
         SetAmount(Mathf.Max(0, Amount - amount));
     }
 
-    public void ChangeColor(ColorType color) {
-        if (colorData == null) return;
+    public void ChangeColor(ColorType colorType, UnityEngine.Color color) {
 
-        Color = color;
+        Color = colorType;
+        boxVisualColor = color;
 
         boxRenderer.GetPropertyBlock(boxMaterial);
-        boxMaterial.SetColor("_BaseColor", colorData.GetColor(color));
+        boxMaterial.SetColor("_BaseColor", color);
         boxRenderer.SetPropertyBlock(boxMaterial);
 
         mouthRenderer.GetPropertyBlock(mouthMaterial);
-        mouthMaterial.SetColor("_BaseColor", colorData.GetColor(color));
+        mouthMaterial.SetColor("_BaseColor", color);
         mouthRenderer.SetPropertyBlock(mouthMaterial);
     }
     public void DisableOutline() {
@@ -126,10 +126,12 @@ public class Box : MonoBehaviour
                 break;
             case BoxAnimationState.Close:
                 DisableOutline();
+                release = false;
                 anim.SetTrigger("Complete");
                 break;
             case BoxAnimationState.Killed:
                 DisableOutline();
+                release = false;
                 anim.SetTrigger("Killed");
                 break;
         }

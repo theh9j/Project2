@@ -8,8 +8,17 @@ public class PixelView : MonoBehaviour
     [SerializeField] private ColorData colorData;
     private MaterialPropertyBlock material;
     public ColorType Color { get; private set; }
-    public bool wait = false;
-    public bool pickedUp = false;
+    public Vector2Int GridPosition { get; private set; }
+    public bool IsReserved { get; private set; }
+    public bool IsPickedUp { get; private set; }
+
+    public bool IsAvailableFor(ColorType color) {
+        return Color == color &&
+               Color != ColorType.None &&
+               Color != ColorType.Invalid &&
+               !IsReserved &&
+               !IsPickedUp;
+    }
 
     void Awake() {
         if (render == null) {
@@ -37,6 +46,28 @@ public class PixelView : MonoBehaviour
         render.GetPropertyBlock(material);
         material.SetColor("_BaseColor", colorData.GetColor(color));
         render.SetPropertyBlock(material);
+    }
+
+    public void SetGridPosition(int x, int y) {
+        GridPosition = new Vector2Int(x, y);
+    }
+
+    public bool TryReserve() {
+        if (IsReserved || IsPickedUp) return false;
+
+        IsReserved = true;
+        return true;
+    }
+
+    public void ReleaseReservation() {
+        if (!IsPickedUp) {
+            IsReserved = false;
+        }
+    }
+
+    public void MarkPickedUp() {
+        IsPickedUp = true;
+        IsReserved = false;
     }
 
 }

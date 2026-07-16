@@ -12,6 +12,8 @@ public class AdminBoxConfig : MonoBehaviour
     [SerializeField] private BoxManagementSystem boxMana;
     [SerializeField] private WaitingSlotsManagementSystem waitingSlots;
 
+    [Header("References")]
+    [SerializeField] private ColorData colorData;
 
     //INPUT
     [SerializeField] private TMP_InputField amountInput;
@@ -105,7 +107,7 @@ public class AdminBoxConfig : MonoBehaviour
             }
         }
 
-        selectedBox.ChangeColor(newColor);
+        selectedBox.ChangeColor(newColor, colorData.GetColor(newColor));
         handler.Log();
     }
 }

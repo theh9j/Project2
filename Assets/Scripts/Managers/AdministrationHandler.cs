@@ -36,6 +36,7 @@ public class AdministrationHandler : MonoBehaviour
         deleteColorBoxButton.onClick.AddListener(() => {
             boxManager.RemoveBoxesOfCertainColor(ColorType.White);
             waitManager.RemoveBoxesOfCertainColor(ColorType.White);
+            Ants.Instance?.KillAnts(a => a.Color == ColorType.White && a.Pixel == null);
         });
 
         //FUNCTIONS

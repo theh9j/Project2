@@ -46,3 +46,10 @@ public enum WaitingSlotState {
     Occupied,
     Locked
 }
+
+public enum TraySide {
+    Bottom,
+    Left,
+    Right,
+    Top
+}
