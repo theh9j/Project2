@@ -5,9 +5,11 @@ public class PixelView : MonoBehaviour
     [SerializeField] private GameObject pixel;
     [SerializeField] private Renderer render;
 
-    [SerializeField] private ColorData colorData;
     private MaterialPropertyBlock material;
+    private MapCoordination map;
     public ColorType Color { get; private set; }
+    public bool Mysterious { get; private set; }
+
     public Vector2Int GridPosition { get; private set; }
     public bool IsReserved { get; private set; }
     public bool IsPickedUp { get; private set; }
@@ -26,30 +28,28 @@ public class PixelView : MonoBehaviour
         }
 
         material = new MaterialPropertyBlock();
-        if (colorData == null) {
-            colorData = ColorData.LoadDefault();
-        }
 
-        ChangeColor(ColorType.Beige);
 
     }
 
-    public void ChangeColor(ColorType color) {
-        if (material == null || render == null || colorData == null) return;
-        this.Color = color;
-        if (ColorType.None == color) {
+    public void ChangeColor(ColorType colorType, Color color) {
+        if (material == null || render == null) return;
+        this.Color = colorType;
+        map?.NotifyNavigationChanged();
+        if (ColorType.None == colorType) {
             pixel.SetActive(false);
             return;
         }
         if (!pixel.activeSelf) pixel.SetActive(true);
 
         render.GetPropertyBlock(material);
-        material.SetColor("_BaseColor", colorData.GetColor(color));
+        material.SetColor("_BaseColor", color);
         render.SetPropertyBlock(material);
     }
 
-    public void SetGridPosition(int x, int y) {
+    public void SetGridPosition(int x, int y, MapCoordination owner = null) {
         GridPosition = new Vector2Int(x, y);
+        map = owner;
     }
 
     public bool TryReserve() {
@@ -68,6 +68,16 @@ public class PixelView : MonoBehaviour
     public void MarkPickedUp() {
         IsPickedUp = true;
         IsReserved = false;
+        // Vacate the original grid coordinate immediately. The carried
+        // GameObject may continue existing until it reaches the hole, but it
+        // must no longer block pixels behind it.
+        map?.VacateCell(this);
+    }
+
+    private void OnDestroy() {
+        // Also invalidate the cache when a pixel is removed by a path other
+        // than the normal pickup flow.
+        map?.VacateCell(this);
     }
 
 }

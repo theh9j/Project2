@@ -10,8 +10,10 @@ public partial class Box : MonoBehaviour
     [SerializeField] private Outline outline;
 
     [Header("Box's components")]
+    [SerializeField] private Transform boxVisual;
     [SerializeField] private Renderer boxRenderer;
     [SerializeField] private Animator anim;
+    [SerializeField] private ParticleSystem particle;
     private MaterialPropertyBlock boxMaterial;
 
     [Header("Box's Mouth")]
@@ -26,21 +28,39 @@ public partial class Box : MonoBehaviour
     public event Action<Box> Finished;
 
     [Header("Box's properties")]
-    public Box Link { get; private set; }
+    [SerializeField] private ColorType baseColor;
     public ColorType Color { get; private set; } = ColorType.White;
-    [field: SerializeField, Min(0)] public int Amount { get; private set; } = 20;
+    [field: SerializeField, Min(0)] public int Amount { get; private set; } = 100;
     private UnityEngine.Color boxVisualColor = UnityEngine.Color.white;
+    private ColorData colorData;
+
+    [Header("Special Properties")]
+    public bool Mysterious { get; private set; }
+    public Box Link {
+        get {
+            return Link;
+        } 
+        
+        set {
+            if (value == this) return;
+            Link = value;
+        }
+    }
+
 
     void Awake() {
         antNest = GameObject.FindWithTag("Nest").transform;
 
         boxMaterial = new MaterialPropertyBlock();
         mouthMaterial = new MaterialPropertyBlock();
+        if (colorData == null) {
+            colorData = ColorData.LoadDefault();
+        }
         outline.enabled = false;
     }
 
     void Start() {
-        ChangeColor(ColorType.Beige, UnityEngine.Color.beige);
+        ChangeColor(baseColor, colorData.GetColor(baseColor));
         SetAmount(Amount);
     }
 
@@ -51,19 +71,23 @@ public partial class Box : MonoBehaviour
         
 
         Amount = Mathf.Min(amount, 100);
-        if (text != null) {
-            text.text = Amount > 0 ? Amount.ToString() : "";
-        }
+        if (text == null) return;
+        text.text = Mysterious ? "?" :
+            (Amount > 0 ? Amount.ToString() : "");
     }
 
     public void Decrease(int amount) {
         SetAmount(Mathf.Max(0, Amount - amount));
     }
 
-    public void ChangeColor(ColorType colorType, UnityEngine.Color color) {
+    public void ChangeColor(
+        ColorType colorType, 
+        UnityEngine.Color color) 
+        {
 
         Color = colorType;
         boxVisualColor = color;
+        if (Mysterious) color = colorData.GetColor(ColorType.Unknown);
 
         boxRenderer.GetPropertyBlock(boxMaterial);
         boxMaterial.SetColor("_BaseColor", color);
@@ -73,6 +97,13 @@ public partial class Box : MonoBehaviour
         mouthMaterial.SetColor("_BaseColor", color);
         mouthRenderer.SetPropertyBlock(mouthMaterial);
     }
+
+    public void CreateLinkLine() {
+        if (Link == null) return;
+
+
+    }
+
     public void DisableOutline() {
         outline.enabled = false;
     }
@@ -91,23 +122,39 @@ public partial class Box : MonoBehaviour
     }
 
     public void SetGridPosition(int x, int y) {
-        if (!Interactable && y == 0) Animation(BoxAnimationState.Enable);
+        if (!Interactable && y == 0) {
+            SetMysterize(false);
+            Animation(BoxAnimationState.Enable);
+        };
         ColIndex = x;
         RowIndex = y;
     }
 
     public void OnPress(bool press) {
+        if (boxVisual == null) return;
+
+        boxVisual.DOKill();
         if (press) {
-            transform.DOScale(
+            boxVisual.DOScale(
                 new Vector3(1.1f, 1.1f, 1f),
                 .1f
                 );
         } else {
-            transform.DOScale(
+            boxVisual.DOScale(
                 new Vector3(1f, 1f, 1f),
                 .1f
                 );
         }
+    }
+
+    public void SetMysterize(bool mys) {
+        if (Mysterious == mys || Interactable) return;
+
+        Mysterious = mys;
+        if (!mys) 
+            particle.Play();
+        ChangeColor(Color, boxVisualColor);
+        SetAmount(Amount);
     }
 
     public void OnComplete() {

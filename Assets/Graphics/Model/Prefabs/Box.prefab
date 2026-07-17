@@ -139,12 +139,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4588369471373226044}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0.01278}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0.6334001}
   m_LocalScale: {x: 0.35, y: 0.35, z: 0.35}
   m_ConstrainProportionsScale: 1
   m_Children: []
-  m_Father: {fileID: 1458314012575070652}
+  m_Father: {fileID: 1506847796043672446}
   m_LocalEulerAnglesHint: {x: -90, y: 0, z: 0}
 --- !u!198 &4233764200892137007
 ParticleSystem:
@@ -229,7 +229,7 @@ ParticleSystem:
     startLifetime:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 0.5
+      scalar: 1
       minScalar: 5
       maxCurve:
         serializedVersion: 2
@@ -5041,7 +5041,6 @@ Transform:
   m_Children:
   - {fileID: 359263099221193125}
   - {fileID: 5654491758523470928}
-  - {fileID: 6355688698020320973}
   m_Father: {fileID: 1506847796043672446}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!33 &3711159388758984418
@@ -5415,6 +5414,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
+  - {fileID: 6355688698020320973}
   - {fileID: 1458314012575070652}
   m_Father: {fileID: 253021654536475753}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -5536,12 +5536,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Box
   text: {fileID: 8484218651901149171}
   outline: {fileID: 5728115609592231703}
+  boxVisual: {fileID: 1506847796043672446}
   boxRenderer: {fileID: 6691277911388224752}
   anim: {fileID: 5273761087633979802}
+  particle: {fileID: 4233764200892137007}
   mouth: {fileID: 5654491758523470928}
   mouthRenderer: {fileID: 8776304993461199193}
-  <Amount>k__BackingField: 20
+  baseColor: 3
+  <Amount>k__BackingField: 100
   antsSpawner: {fileID: 3519767920654103167}
   antPrefab: {fileID: 5922435700204648058, guid: 75e66d73ffa9ecd41958c8b9b3719d68, type: 3}
   change: 8
-  timeTilAnt: 0.25
+  timeTilAnt: 0.2

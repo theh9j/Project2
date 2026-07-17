@@ -12,6 +12,7 @@ public class AdministrationHandler : MonoBehaviour
     [SerializeField] private WaitingSlotsManagementSystem waitManager;
     [SerializeField] private ColorMissingLog colorLog;
     [SerializeField] private MapCoordination map;
+    [SerializeField] private ColorData colorData;
     [SerializeField] private TMP_Text activeMode;
 
     [Header("Modes")]
@@ -27,11 +28,15 @@ public class AdministrationHandler : MonoBehaviour
 
 
     public EditorState State { get; private set; } = EditorState.Basic;
-
+    public bool link;
 
     void Awake() {
         //MODES
         drawMode.onClick.AddListener(() => ChangeMode(EditorState.Drawing));
+
+        boxConfig.LinkState += () => {
+            link = true;
+        };
 
         deleteColorBoxButton.onClick.AddListener(() => {
             boxManager.RemoveBoxesOfCertainColor(ColorType.White);
@@ -72,7 +77,7 @@ public class AdministrationHandler : MonoBehaviour
         if (colorWheel.Brush == ColorType.Invalid) return;
         if (colorWheel.Brush == pixel.Color) return;
 
-        pixel.ChangeColor(colorWheel.Brush);
+        pixel.ChangeColor(colorWheel.Brush, colorData.GetColor(colorWheel.Brush));
 
         Log();
     }
@@ -85,6 +90,12 @@ public class AdministrationHandler : MonoBehaviour
     //BOX CONFIGURATION
     public void SetBox(Box box) {
         if (box == null) return;
+        if (link) {
+            boxConfig.SetLink(box);
+            link = false;
+            return;
+        }
+
         boxConfig.gameObject.SetActive(true);
         boxConfig.Init(box);
     }

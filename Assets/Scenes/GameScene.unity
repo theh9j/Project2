@@ -8420,7 +8420,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   map: {fileID: 2050873688}
-  trayEdgeOffset: 0.25
+  trayEdgeOffset: 0.08
   holeClearance: 0.2
 --- !u!1001 &2058598167
 PrefabInstance:

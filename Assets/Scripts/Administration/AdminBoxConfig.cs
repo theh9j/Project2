@@ -21,6 +21,8 @@ public class AdminBoxConfig : MonoBehaviour
     //BUTTONS
     [SerializeField] private Button deleteButton;
     [SerializeField] private Button addToPlate;
+    [SerializeField] private Button linkBox;
+    [SerializeField] private Button mysterize;
 
     //DROPDOWN
     [SerializeField] private TMP_Dropdown dropdown;
@@ -33,6 +35,7 @@ public class AdminBoxConfig : MonoBehaviour
 
     //VARIABLES
     List<ColorType> listOfColorTypes = new();
+    public event Action LinkState;
     [HideInInspector] public Box selectedBox;
 
     void Awake() {
@@ -52,11 +55,24 @@ public class AdminBoxConfig : MonoBehaviour
             handler.Log();
         });
 
+        mysterize.onClick.AddListener(() => {
+            if (selectedBox == null) return;
+            selectedBox.SetMysterize(true);
+        });
+
         addToPlate.onClick.AddListener(() => {
             if (selectedBox == null) return;
             if (waitingSlots.AddBoxToAvailablePlate(selectedBox))
                 boxMana.RemoveBox(selectedBox);
         });
+
+        linkBox.onClick.AddListener(() => {
+            if (selectedBox == null) return;
+            LinkState.Invoke();
+        });
+
+
+        //ANIMATIONS
 
         enable.onClick.AddListener(() => {
             if (selectedBox == null) return;
@@ -89,6 +105,15 @@ public class AdminBoxConfig : MonoBehaviour
         
         amountInput.text = box.Amount.ToString();
 
+    }
+
+    public void SetLink(Box box) {
+        if (selectedBox == box || selectedBox.Link != null || box.Link != null) return;
+
+        selectedBox.Link = box;
+        box.Link = selectedBox;
+
+        selectedBox.CreateLinkLine();
     }
 
     public void Deselection() {

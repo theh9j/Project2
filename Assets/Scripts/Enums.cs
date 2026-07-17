@@ -2,7 +2,7 @@ using UnityEngine;
 
 public enum EditorState {
     Basic,
-    Drawing
+    Drawing,
 }
 
 public enum BoxAnimationState {
@@ -13,6 +13,10 @@ public enum BoxAnimationState {
 }
 
 public enum ColorType {
+    None,
+    Invalid,
+    Unknown,
+
     Red,
     Green,
     Blue,
@@ -32,8 +36,6 @@ public enum ColorType {
     Gray,
     Black,
 
-    None,
-    Invalid
 }
 
 public enum InputType {

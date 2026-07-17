@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 public partial class SpaceNavigation : MonoBehaviour
@@ -8,7 +7,7 @@ public partial class SpaceNavigation : MonoBehaviour
 
     [Header("Route spacing")]
     [Min(0.01f)]
-    [SerializeField] private float trayEdgeOffset = 0.25f;
+    [SerializeField] private float trayEdgeOffset = 0.08f;
 
     [Min(0.01f)]
     [SerializeField] private float holeClearance = 0.2f;
@@ -32,49 +31,77 @@ public partial class SpaceNavigation : MonoBehaviour
             return false;
         }
 
-        List<RouteCandidate> candidates = map.ExposedPixels
-            .Where(pixel => pixel != null && pixel.IsAvailableFor(color))
-            .Select(pixel => CreateCandidate(pixel, start, trayBounds))
-            .Where(candidate => candidate.IsValid)
-            .ToList();
-
+        List<MapCoordination.ExposedTarget> candidates =
+            map.GetAvailableExposedTargets(color);
         if (candidates.Count == 0) return false;
 
-        List<RouteCandidate> bottomCandidates = candidates
-            .Where(candidate => candidate.OpeningSide == TraySide.Bottom)
-            .ToList();
+        MapCoordination.ExposedTarget chosen = default;
+        float bestScore = float.MaxValue;
+        foreach (MapCoordination.ExposedTarget candidate in candidates) {
+            float score = EstimateApproachDistance(
+                start,
+                candidate,
+                trayBounds);
+            if (score >= bestScore) continue;
 
-        RouteCandidate chosen = (bottomCandidates.Count > 0
-                ? bottomCandidates
-                : candidates)
-            .OrderBy(candidate => candidate.Distance)
-            .First();
+            chosen = candidate;
+            bestScore = score;
+        }
 
-        if (!chosen.Pixel.TryReserve()) return false;
+        if (chosen.Pixel == null || !chosen.Pixel.TryReserve()) return false;
+
+        List<Vector3> chosenRoute = BuildRoute(
+            start,
+            chosen.Opening,
+            chosen.OpeningSide,
+            trayBounds);
+
+        if (!AppendPixelCollectionSimulation(
+                chosenRoute,
+                chosen.Pixel,
+                chosen.Opening,
+                chosen.OpeningSide,
+                trayBounds,
+                start.z)) {
+            chosen.Pixel.ReleaseReservation();
+            return false;
+        }
 
         target = chosen.Pixel;
-        route = chosen.Route;
+        route = chosenRoute;
         return true;
     }
 
-    private RouteCandidate CreateCandidate(
-        PixelView pixel,
+    private float EstimateApproachDistance(
         Vector3 start,
+        MapCoordination.ExposedTarget candidate,
         Bounds trayBounds) {
-        if (!map.TryGetOpening(pixel, out TraySide openingSide, out Vector3 opening)) {
-            return default;
+        float bottomY = trayBounds.min.y - trayEdgeOffset;
+        float leftX = trayBounds.min.x - trayEdgeOffset;
+        float rightX = trayBounds.max.x + trayEdgeOffset;
+        float topY = trayBounds.max.y + trayEdgeOffset;
+        float distance = Mathf.Abs(start.y - bottomY);
+
+        switch (candidate.OpeningSide) {
+            case TraySide.Bottom:
+                distance += Mathf.Abs(start.x - candidate.Opening.x);
+                break;
+            case TraySide.Left:
+                distance += Mathf.Abs(start.x - leftX) +
+                            Mathf.Abs(candidate.Opening.y - bottomY);
+                break;
+            case TraySide.Right:
+                distance += Mathf.Abs(start.x - rightX) +
+                            Mathf.Abs(candidate.Opening.y - bottomY);
+                break;
+            case TraySide.Top:
+                distance += Mathf.Abs(start.x - leftX) +
+                            Mathf.Abs(topY - bottomY) +
+                            Mathf.Abs(candidate.Opening.x - leftX);
+                break;
         }
 
-        List<Vector3> route = BuildRoute(start, opening, openingSide, trayBounds);
-        AppendPixelCollectionSimulation(
-            route,
-            pixel,
-            opening,
-            openingSide,
-            trayBounds,
-            start.z);
-        float distance = GetRouteDistance(start, route);
-        return new RouteCandidate(pixel, openingSide, route, distance);
+        return distance + candidate.GridDistance * map.CellStep;
     }
 
     private List<Vector3> BuildRoute(
@@ -191,37 +218,6 @@ public partial class SpaceNavigation : MonoBehaviour
         if (route.Count == 0 ||
             (route[route.Count - 1] - point).sqrMagnitude > 0.0001f) {
             route.Add(point);
-        }
-    }
-
-    private static float GetRouteDistance(Vector3 start, List<Vector3> route) {
-        float distance = 0f;
-        Vector3 previous = start;
-
-        foreach (Vector3 point in route) {
-            distance += Vector3.Distance(previous, point);
-            previous = point;
-        }
-
-        return distance;
-    }
-
-    private readonly struct RouteCandidate {
-        public PixelView Pixel { get; }
-        public TraySide OpeningSide { get; }
-        public List<Vector3> Route { get; }
-        public float Distance { get; }
-        public bool IsValid => Pixel != null && Route != null;
-
-        public RouteCandidate(
-            PixelView pixel,
-            TraySide openingSide,
-            List<Vector3> route,
-            float distance) {
-            Pixel = pixel;
-            OpeningSide = openingSide;
-            Route = route;
-            Distance = distance;
         }
     }
 

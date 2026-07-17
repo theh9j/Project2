@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 public class MapCoordination : MonoBehaviour {
+    [SerializeField] private ColorType baseColor;
+
     [Header("UI Frame")]
     [SerializeField] private RectTransform frame;
     [SerializeField] private RectTransform hole;
@@ -11,6 +13,7 @@ public class MapCoordination : MonoBehaviour {
     [SerializeField] private Camera worldCamera;
     [Tooltip("Optional flat transform used only for measuring the frame. Leave empty to use this transform without its local X/Y tilt.")]
     [SerializeField] private Transform layoutReference;
+    [SerializeField] private ColorData colorData;
 
     [Header("Grid")]
     [SerializeField] private GameObject pixelPrefab;
@@ -32,13 +35,21 @@ public class MapCoordination : MonoBehaviour {
     [SerializeField] private bool fitVisualToPixelSize = true;
 
     private readonly List<GameObject> pixels = new();
+    private readonly List<PixelView> pixelArt = new();
     private readonly Vector3[] frameCorners = new Vector3[4];
+    private PixelView[,] pixelGrid;
+    private Vector3[,] cellWorldPositions;
+    private Bounds gridWorldBounds;
+    private bool hasGridWorldBounds;
+    private readonly List<ExposedTarget> exposedTargetCache = new();
+    private bool navigationDirty = true;
 
     private int columns;
     private int rows;
 
     public int Columns => columns;
     public int Rows => rows;
+    public float CellStep => Mathf.Abs(pixelSize + pixelGap);
 
     private void Start() {
         if (rebuildOnStart) {
@@ -46,10 +57,12 @@ public class MapCoordination : MonoBehaviour {
         }
     }
 
+    public List<PixelView> GetMapLayout() {
+        return pixelArt;
+    }
+
     public void RebuildGrid() {
-        if (pixelParent == null) {
-            pixelParent = transform;
-        }
+        pixelParent ??= transform;
 
         if (!TryGetFrameLocalBounds(
                 out Vector3 localCenter,
@@ -66,7 +79,7 @@ public class MapCoordination : MonoBehaviour {
         rows = Mathf.FloorToInt((usableHeight + pixelGap) / cellSize);
 
         if (columns < 1 || rows < 1) {
-            Debug.LogWarning("The frame is too small for the current pixel size.");
+            WarningMessage.Instance?.Warn("ERR | The frame is too small for the current pixel size.");
             return;
         }
 
@@ -86,7 +99,7 @@ public class MapCoordination : MonoBehaviour {
         height = 0f;
 
         if (frame == null || frameCanvas == null || worldCamera == null) {
-            Debug.LogError("Frame, Canvas, or World Camera is missing.");
+            WarningMessage.Instance?.Warn("ERR | Frame, Canvas, or World Camera is missing.");
             return false;
         }
 
@@ -110,7 +123,7 @@ public class MapCoordination : MonoBehaviour {
 
             Ray ray = worldCamera.ScreenPointToRay(screenPoint);
             if (!mapPlane.Raycast(ray, out float distance)) {
-                Debug.LogError("Could not project frame corner onto map plane.");
+                WarningMessage.Instance?.Warn("ERR | Could not project frame corner onto map plane.");
                 return false;
             }
 
@@ -158,7 +171,7 @@ public class MapCoordination : MonoBehaviour {
         ClearGrid();
 
         if (pixelPrefab == null) {
-            Debug.LogError("Pixel prefab is not assigned.");
+            WarningMessage.Instance?.Warn("ERR | Pixel prefab is not assigned.");
             return;
         }
 
@@ -177,6 +190,10 @@ public class MapCoordination : MonoBehaviour {
         float startY =
             gridHeight * 0.5f -
             pixelSize * 0.5f;
+
+        pixelGrid = new PixelView[columns, rows];
+        cellWorldPositions = new Vector3[columns, rows];
+        hasGridWorldBounds = false;
 
         for (int y = 0; y < rows; y++) {
             for (int x = 0; x < columns; x++) {
@@ -211,10 +228,26 @@ public class MapCoordination : MonoBehaviour {
                 }
 
                 PixelView pixelView = pixel.GetComponent<PixelView>();
-                pixelView.SetGridPosition(x, y);
+                pixelView.ChangeColor(baseColor, colorData.GetColor(baseColor));
+                pixelView.SetGridPosition(x, y, this);
+                pixelArt.Add(pixelView);
+
+                pixelGrid[x, y] = pixelView;
+                cellWorldPositions[x, y] = pixel.transform.position;
+
+                if (!hasGridWorldBounds) {
+                    gridWorldBounds = new Bounds(pixel.transform.position, Vector3.zero);
+                    hasGridWorldBounds = true;
+                } else {
+                    gridWorldBounds.Encapsulate(pixel.transform.position);
+                }
 
                 pixels.Add(pixel);
             }
+        }
+
+        if (hasGridWorldBounds) {
+            gridWorldBounds.Expand(new Vector3(pixelSize, pixelSize, 0f));
         }
     }
 
@@ -238,31 +271,33 @@ public class MapCoordination : MonoBehaviour {
         }
 
         pixels.Clear();
+        pixelArt.Clear();
+        pixelGrid = null;
+        cellWorldPositions = null;
+        hasGridWorldBounds = false;
+        exposedTargetCache.Clear();
+        navigationDirty = true;
     }
 
     public void SetPixelColor(int x, int y, ColorType color) {
         if (x < 0 || x >= columns || y < 0 || y >= rows) return;
 
-        int index = y * columns + x;
-        if (index < 0 || index >= pixels.Count) return;
-
-        PixelView pixelView = pixels[index].GetComponentInChildren<PixelView>();
-        if (pixelView != null) {
-            pixelView.ChangeColor(color);
-        }
+        PixelView pixelView = GetPixel(x, y);
+        pixelView?.ChangeColor(color, colorData.GetColor(color));
     }
 
     public Dictionary<ColorType, int> GetPixelColorCount() {
         if (pixels == null) return new Dictionary<ColorType, int>();
 
         Dictionary<ColorType, int> listOfPixel = new();
-        List<PixelView> pixelViews = pixels.ConvertAll(p => p.GetComponentInChildren<PixelView>());
+        for (int y = 0; y < rows; y++) {
+            for (int x = 0; x < columns; x++) {
+                PixelView pixel = GetPixel(x, y);
+                if (pixel == null || pixel.Color == ColorType.None) continue;
 
-        foreach (PixelView pixel in pixelViews) {
-            if (pixel == null || pixel.Color == ColorType.None) continue;
-
-            listOfPixel.TryGetValue(pixel.Color, out int amount);
-            listOfPixel[pixel.Color] = amount + 1;
+                listOfPixel.TryGetValue(pixel.Color, out int amount);
+                listOfPixel[pixel.Color] = amount + 1;
+            }
         }
 
         return listOfPixel;
@@ -270,18 +305,11 @@ public class MapCoordination : MonoBehaviour {
     public List<PixelView> ExposedPixels {
         get {
             List<PixelView> exposedPixels = new();
-            if (columns <= 0 || rows <= 0) return exposedPixels;
+            if (pixelGrid == null) return exposedPixels;
 
-            bool[,] reachableEmpty = GetOutsideReachableEmptyPixels();
-            for (int y = 0; y < rows; y++) {
-                for (int x = 0; x < columns; x++) {
-                    PixelView pixel = GetPixel(x, y);
-                    if (pixel == null || pixel.Color == ColorType.None) continue;
-
-                    if (IsExposed(x, y, reachableEmpty)) {
-                        exposedPixels.Add(pixel);
-                    }
-                }
+            RebuildNavigationCacheIfNeeded();
+            foreach (ExposedTarget target in exposedTargetCache) {
+                if (target.Pixel != null) exposedPixels.Add(target.Pixel);
             }
 
             return exposedPixels;
@@ -290,12 +318,103 @@ public class MapCoordination : MonoBehaviour {
 
     public PixelView GetPixel(int x, int y) {
         if (x < 0 || x >= columns || y < 0 || y >= rows) return null;
+        if (pixelGrid == null) return null;
+        return pixelGrid[x, y];
+    }
 
-        int index = y * columns + x;
-        if (index < 0 || index >= pixels.Count) return null;
-        if (pixels[index] == null) return null;
+    public bool IsCellWalkable(Vector2Int grid) {
+        if (grid.x < 0 || grid.x >= columns ||
+            grid.y < 0 || grid.y >= rows ||
+            pixelGrid == null) return false;
 
-        return pixels[index].GetComponentInChildren<PixelView>();
+        PixelView pixel = pixelGrid[grid.x, grid.y];
+        // A null entry means its pixel GameObject has already been removed.
+        // It remains a valid grid cell and must behave exactly like None.
+        return pixel == null ||
+               pixel.Color == ColorType.None ||
+               pixel.IsPickedUp;
+    }
+
+    public Vector3 GetCellWorldPosition(int x, int y) {
+        if (x < 0 || x >= columns || y < 0 || y >= rows ||
+            cellWorldPositions == null) return Vector3.zero;
+        return cellWorldPositions[x, y];
+    }
+
+    public Vector3 GetCellWorldPosition(Vector2Int grid) {
+        return GetCellWorldPosition(grid.x, grid.y);
+    }
+
+    /// <summary>
+    /// Performs one flood-fill for the current map and returns every matching
+    /// exposed pixel with its best tray opening. This replaces the previous
+    /// per-candidate flood-fill used during ant spawning.
+    /// </summary>
+    public List<ExposedTarget> GetAvailableExposedTargets(ColorType color) {
+        List<ExposedTarget> results = new();
+        if (pixelGrid == null || columns <= 0 || rows <= 0) return results;
+
+        RebuildNavigationCacheIfNeeded();
+        foreach (ExposedTarget target in exposedTargetCache) {
+            if (target.Pixel != null && target.Pixel.IsAvailableFor(color)) {
+                results.Add(target);
+            }
+        }
+
+        return results;
+    }
+
+    public void NotifyNavigationChanged() {
+        navigationDirty = true;
+    }
+
+    public void VacateCell(PixelView pixel) {
+        if (pixel == null || pixelGrid == null) return;
+
+        Vector2Int grid = pixel.GridPosition;
+        if (grid.x < 0 || grid.x >= columns ||
+            grid.y < 0 || grid.y >= rows) return;
+
+        if (pixelGrid[grid.x, grid.y] != pixel) return;
+
+        pixelGrid[grid.x, grid.y] = null;
+        navigationDirty = true;
+    }
+
+    private void RebuildNavigationCacheIfNeeded() {
+        if (!navigationDirty) return;
+
+        navigationDirty = false;
+        exposedTargetCache.Clear();
+
+        BuildOpeningMap(
+            out int[,] distances,
+            out TraySide[,] sides,
+            out Vector2Int[,] openings);
+
+        for (int y = 0; y < rows; y++) {
+            for (int x = 0; x < columns; x++) {
+                PixelView pixel = pixelGrid[x, y];
+                if (pixel == null ||
+                    pixel.Color == ColorType.None ||
+                    pixel.IsPickedUp) continue;
+
+                if (TryResolveOpening(
+                        pixel.GridPosition,
+                        distances,
+                        sides,
+                        openings,
+                        out TraySide side,
+                        out Vector3 opening,
+                        out int gridDistance)) {
+                    exposedTargetCache.Add(new ExposedTarget(
+                        pixel,
+                        side,
+                        opening,
+                        gridDistance));
+                }
+            }
+        }
     }
 
     private bool IsExposed(int x, int y, bool[,] reachableEmpty) {
@@ -350,8 +469,8 @@ public class MapCoordination : MonoBehaviour {
     }
 
     private bool HasVisiblePixel(int x, int y) {
-        PixelView pixel = GetPixel(x, y);
-        return pixel != null && pixel.Color != ColorType.None;
+        if (x < 0 || x >= columns || y < 0 || y >= rows) return false;
+        return !IsCellWalkable(new Vector2Int(x, y));
     }
 
     public bool TryGetOpening(
@@ -363,42 +482,76 @@ public class MapCoordination : MonoBehaviour {
 
         if (target == null || columns <= 0 || rows <= 0) return false;
 
-        Vector2Int targetGrid = target.GridPosition;
-        int[,] distances = new int[columns, rows];
-        TraySide[,] sides = new TraySide[columns, rows];
-        Vector2Int[,] openings = new Vector2Int[columns, rows];
+        BuildOpeningMap(
+            out int[,] distances,
+            out TraySide[,] sides,
+            out Vector2Int[,] openings);
+
+        return TryResolveOpening(
+            target.GridPosition,
+            distances,
+            sides,
+            openings,
+            out side,
+            out openingPosition,
+            out _);
+    }
+
+    private void BuildOpeningMap(
+        out int[,] distances,
+        out TraySide[,] sides,
+        out Vector2Int[,] openings) {
+        distances = new int[columns, rows];
+        sides = new TraySide[columns, rows];
+        openings = new Vector2Int[columns, rows];
         Queue<Vector2Int> search = new();
 
         for (int x = 0; x < columns; x++) {
             TrySeedOpening(x, rows - 1, TraySide.Bottom, distances, sides, openings, search);
-            TrySeedOpening(x, 0, TraySide.Top, distances, sides, openings, search);
         }
-
-        for (int y = 0; y < rows; y++) {
+        for (int y = rows - 1; y >= 0; y--) {
             TrySeedOpening(0, y, TraySide.Left, distances, sides, openings, search);
             TrySeedOpening(columns - 1, y, TraySide.Right, distances, sides, openings, search);
+        }
+        for (int x = 0; x < columns; x++) {
+            TrySeedOpening(x, 0, TraySide.Top, distances, sides, openings, search);
         }
 
         while (search.Count > 0) {
             Vector2Int current = search.Dequeue();
-            TrySpreadOpening(current, current.x, current.y - 1, distances, sides, openings, search);
-            TrySpreadOpening(current, current.x + 1, current.y, distances, sides, openings, search);
             TrySpreadOpening(current, current.x, current.y + 1, distances, sides, openings, search);
             TrySpreadOpening(current, current.x - 1, current.y, distances, sides, openings, search);
+            TrySpreadOpening(current, current.x + 1, current.y, distances, sides, openings, search);
+            TrySpreadOpening(current, current.x, current.y - 1, distances, sides, openings, search);
         }
+    }
+
+    private bool TryResolveOpening(
+        Vector2Int targetGrid,
+        int[,] distances,
+        TraySide[,] sides,
+        Vector2Int[,] openings,
+        out TraySide side,
+        out Vector3 openingPosition,
+        out int gridDistance) {
+        side = TraySide.Bottom;
+        openingPosition = Vector3.zero;
+        gridDistance = 0;
 
         if (TryGetDirectBoundaryOpening(targetGrid, out side, out Vector2Int directOpening)) {
-            openingPosition = GetPixel(directOpening.x, directOpening.y).transform.position;
+            PixelView directPixel = GetPixel(directOpening.x, directOpening.y);
+            if (directPixel == null) return false;
+            openingPosition = GetCellWorldPosition(directOpening);
             return true;
         }
 
         int bestDistance = int.MaxValue;
         Vector2Int bestOpening = targetGrid;
         Vector2Int[] neighbours = {
-            new(targetGrid.x, targetGrid.y - 1),
+            new(targetGrid.x, targetGrid.y + 1), // bottom first
+            new(targetGrid.x - 1, targetGrid.y),
             new(targetGrid.x + 1, targetGrid.y),
-            new(targetGrid.x, targetGrid.y + 1),
-            new(targetGrid.x - 1, targetGrid.y)
+            new(targetGrid.x, targetGrid.y - 1)
         };
 
         foreach (Vector2Int neighbour in neighbours) {
@@ -414,33 +567,14 @@ public class MapCoordination : MonoBehaviour {
         }
 
         if (bestDistance == int.MaxValue) return false;
-
-        PixelView openingPixel = GetPixel(bestOpening.x, bestOpening.y);
-        if (openingPixel == null) return false;
-
-        openingPosition = openingPixel.transform.position;
+        openingPosition = GetCellWorldPosition(bestOpening);
+        gridDistance = bestDistance;
         return true;
     }
 
     public bool TryGetGridWorldBounds(out Bounds bounds) {
-        bounds = new Bounds();
-        bool hasPixel = false;
-
-        foreach (GameObject pixel in pixels) {
-            if (pixel == null) continue;
-
-            if (!hasPixel) {
-                bounds = new Bounds(pixel.transform.position, Vector3.zero);
-                hasPixel = true;
-            } else {
-                bounds.Encapsulate(pixel.transform.position);
-            }
-        }
-
-        if (!hasPixel) return false;
-
-        bounds.Expand(new Vector3(pixelSize, pixelSize, 0f));
-        return true;
+        bounds = gridWorldBounds;
+        return hasGridWorldBounds;
     }
 
     public bool TryGetHoleWorldBounds(out Bounds bounds) {
@@ -540,5 +674,23 @@ public class MapCoordination : MonoBehaviour {
         }
 
         return hasCorner;
+    }
+
+    public readonly struct ExposedTarget {
+        public PixelView Pixel { get; }
+        public TraySide OpeningSide { get; }
+        public Vector3 Opening { get; }
+        public int GridDistance { get; }
+
+        public ExposedTarget(
+            PixelView pixel,
+            TraySide openingSide,
+            Vector3 opening,
+            int gridDistance) {
+            Pixel = pixel;
+            OpeningSide = openingSide;
+            Opening = opening;
+            GridDistance = gridDistance;
+        }
     }
 }
