@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 public class AdminBoxConfig : MonoBehaviour
@@ -35,13 +36,23 @@ public class AdminBoxConfig : MonoBehaviour
 
     //VARIABLES
     List<ColorType> listOfColorTypes = new();
-    public event Action LinkState;
+    public event Action<Box> LinkState;
     [HideInInspector] public Box selectedBox;
+    private Box linkSource;
 
     void Awake() {
-        listOfColorTypes = Enum.GetValues(typeof(ColorType)).Cast<ColorType>().ToList();
+        listOfColorTypes = Enum
+            .GetValues(typeof(ColorType))
+            .Cast<ColorType>()
+            .Where(c => c != ColorType.None && c != ColorType.Unknown && c != ColorType.Invalid)
+            .ToList();
+        
+        dropdown.AddOptions(
+            listOfColorTypes
+            .ToList()
+            .ConvertAll(i => i.ToString())
+            );
 
-        dropdown.AddOptions(listOfColorTypes.ConvertAll(i => i.ToString()));
         dropdown.onValueChanged.AddListener(OnDropdownChange);
 
         amountInput.onEndEdit.AddListener((value) => {
@@ -62,13 +73,13 @@ public class AdminBoxConfig : MonoBehaviour
 
         addToPlate.onClick.AddListener(() => {
             if (selectedBox == null) return;
-            if (waitingSlots.AddBoxToAvailablePlate(selectedBox))
-                boxMana.RemoveBox(selectedBox);
+            waitingSlots.AddBoxToAvailablePlate(selectedBox);
         });
 
         linkBox.onClick.AddListener(() => {
             if (selectedBox == null) return;
-            LinkState.Invoke();
+            linkSource = selectedBox;
+            LinkState?.Invoke(linkSource);
         });
 
 
@@ -96,24 +107,34 @@ public class AdminBoxConfig : MonoBehaviour
     }
 
     public void Init(Box box) {
-        if (selectedBox == box) return;
+        if (selectedBox == box) {
+            RefreshConfigFields();
+            return;
+        }
+
         selectedBox = box;
         selectedBox.SetOutline(Color.aquamarine);
 
-        for (int i = 0; i < dropdown.options.Count; i++) 
-            if (dropdown.options[i].ToString() == box.Color.ToString()) dropdown.value = i;
-        
-        amountInput.text = box.Amount.ToString();
-
+        RefreshConfigFields();
     }
 
-    public void SetLink(Box box) {
-        if (selectedBox == box || selectedBox.Link != null || box.Link != null) return;
+    public bool SetLink(Box box) {
+        Box sourceBox = linkSource ?? selectedBox;
+        linkSource = null;
 
-        selectedBox.Link = box;
-        box.Link = selectedBox;
+        if (sourceBox == null || box == null) return false;
+        if (sourceBox == box) return false;
+        if (sourceBox.Link != null || box.Link != null) return false;
 
-        selectedBox.CreateLinkLine();
+        sourceBox.Link = box;
+        box.Link = sourceBox;
+
+        box.linkLine = sourceBox.CreateLinkLine();
+        if (box.linkLine == null || sourceBox.linkLine == null) {
+            WarningMessage.Instance?.Warn("ERR | Can't create link line");
+            return false;
+        }
+        return true;
     }
 
     public void Deselection() {
@@ -124,15 +145,20 @@ public class AdminBoxConfig : MonoBehaviour
 
     private void OnDropdownChange(int colorType) {
         if (selectedBox == null) return;
+        if (colorType < 0 || colorType >= listOfColorTypes.Count) return;
 
-        ColorType newColor = ColorType.Invalid; 
-        for (int i = 0; i < listOfColorTypes.Count; i++) {
-            if (listOfColorTypes[i].ToString() == dropdown.options[colorType].text) {
-                newColor = listOfColorTypes[i];
-            }
-        }
-
+        ColorType newColor = listOfColorTypes[colorType];
         selectedBox.ChangeColor(newColor, colorData.GetColor(newColor));
         handler.Log();
+    }
+
+    private void RefreshConfigFields() {
+        int colorIndex = listOfColorTypes.IndexOf(selectedBox.Color);
+        if (colorIndex >= 0) {
+            dropdown.SetValueWithoutNotify(colorIndex);
+            dropdown.RefreshShownValue();
+        }
+
+        amountInput.SetTextWithoutNotify(selectedBox.Amount.ToString());
     }
 }

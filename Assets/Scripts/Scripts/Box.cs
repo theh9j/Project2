@@ -14,6 +14,8 @@ public partial class Box : MonoBehaviour
     [SerializeField] private Renderer boxRenderer;
     [SerializeField] private Animator anim;
     [SerializeField] private ParticleSystem particle;
+    [SerializeField] private GameObject linkPrefab;
+    public Transform linkPoint;
     private MaterialPropertyBlock boxMaterial;
 
     [Header("Box's Mouth")]
@@ -24,8 +26,30 @@ public partial class Box : MonoBehaviour
     [Header("Box position")]
     public int ColIndex { get; private set; } = 1000;
     public int RowIndex { get; private set; } = 1000;
-    public bool Interactable => RowIndex == 0;
+    public bool Interactable {
+        get {
+            if (Link == null)
+                return RowIndex == 0;
+
+            bool bothOnTopOfDifferentColumns =
+                RowIndex == 0 &&
+                Link.RowIndex == 0 &&
+                ColIndex != Link.ColIndex;
+
+            bool verticalPairOnFirstTwoRows =
+                ColIndex == Link.ColIndex &&
+                (
+                    (RowIndex == 0 && Link.RowIndex == 1) ||
+                    (RowIndex == 1 && Link.RowIndex == 0)
+                );
+
+            return bothOnTopOfDifferentColumns ||
+                   verticalPairOnFirstTwoRows;
+        }
+    }
+
     public event Action<Box> Finished;
+    public event Action Elevated;
 
     [Header("Box's properties")]
     [SerializeField] private ColorType baseColor;
@@ -36,17 +60,10 @@ public partial class Box : MonoBehaviour
 
     [Header("Special Properties")]
     public bool Mysterious { get; private set; }
-    public Box Link {
-        get {
-            return Link;
-        } 
-        
-        set {
-            if (value == this) return;
-            Link = value;
-        }
-    }
-
+    public Box Link { get; set; }
+    [HideInInspector] public Link linkLine;
+    public Tween inColMovement;
+    private bool finishing;
 
     void Awake() {
         antNest = GameObject.FindWithTag("Nest").transform;
@@ -88,6 +105,7 @@ public partial class Box : MonoBehaviour
         Color = colorType;
         boxVisualColor = color;
         if (Mysterious) color = colorData.GetColor(ColorType.Unknown);
+        linkLine?.SetNewColor(this, color);
 
         boxRenderer.GetPropertyBlock(boxMaterial);
         boxMaterial.SetColor("_BaseColor", color);
@@ -98,13 +116,41 @@ public partial class Box : MonoBehaviour
         mouthRenderer.SetPropertyBlock(mouthMaterial);
     }
 
-    public void CreateLinkLine() {
-        if (Link == null) return;
+    public void ApplySavedState(
+        ColorType colorType,
+        int amount,
+        bool mysterious) {
+        baseColor = colorType;
+        Mysterious = mysterious;
 
-
+        ChangeColor(colorType, colorData.GetColor(colorType));
+        SetAmount(amount);
     }
 
-    public void DisableOutline() {
+    public Link CreateLinkLine() {
+        if (Link == null || linkPrefab == null) return null;
+
+        GameObject linkGO = Instantiate(linkPrefab, transform);
+        linkLine = linkGO.GetComponent<Link>();
+        linkLine.Init(this, Link);
+
+        Finished += (box) => {
+            Destroy(linkLine);
+        };
+
+        Link.Finished += (box) => {
+            Destroy(linkLine);
+        };
+
+        return linkLine;
+    }
+
+    public void RemoveLink() {
+        if (linkLine != null) Destroy(linkLine.gameObject);
+        Link = null;
+    }
+
+    public void DisableOutline() { 
         outline.enabled = false;
     }
 
@@ -122,25 +168,26 @@ public partial class Box : MonoBehaviour
     }
 
     public void SetGridPosition(int x, int y) {
-        if (!Interactable && y == 0) {
+        if (RowIndex != 0 && y == 0) {
             SetMysterize(false);
             Animation(BoxAnimationState.Enable);
-        };
+        }
         ColIndex = x;
         RowIndex = y;
+        if (!Interactable && RowIndex != 0 && RowIndex != 1000) {
+            DisableOutline();
+            anim.Play("Idle", 0, 0f);
+        }
     }
 
     public void OnPress(bool press) {
-        if (boxVisual == null) return;
-
-        boxVisual.DOKill();
         if (press) {
-            boxVisual.DOScale(
+            transform.DOScale(
                 new Vector3(1.1f, 1.1f, 1f),
                 .1f
                 );
         } else {
-            boxVisual.DOScale(
+            transform.DOScale(
                 new Vector3(1f, 1f, 1f),
                 .1f
                 );
@@ -151,17 +198,27 @@ public partial class Box : MonoBehaviour
         if (Mysterious == mys || Interactable) return;
 
         Mysterious = mys;
-        if (!mys) 
+        if (!mys) {
             particle.Play();
+        }
         ChangeColor(Color, boxVisualColor);
         SetAmount(Amount);
+    }
+
+    private void ClearConnections() {
+        RemoveLink();
     }
 
     public void OnComplete() {
         Finished?.Invoke(this);
     }
 
+    public void OnElevate() {
+        Elevated?.Invoke();
+    }
+
     public void Animation(BoxAnimationState state) {
+        if (finishing) return;
         switch (state) {
             case BoxAnimationState.Enable:
                 SetOutline();
@@ -179,7 +236,9 @@ public partial class Box : MonoBehaviour
             case BoxAnimationState.Killed:
                 DisableOutline();
                 release = false;
+                ClearConnections();
                 anim.SetTrigger("Killed");
+                finishing = true;
                 break;
         }
     }

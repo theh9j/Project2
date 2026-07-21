@@ -8,7 +8,18 @@ public class Ants : MonoBehaviour
     public static Ants Instance;
 
     [SerializeField] private SpaceNavigation navigation;
+    [SerializeField] private BoxManagementSystem boxManager;
+
+    [Header("Fast Forward")]
+    [Min(1f)]
+    [SerializeField] private float fastForwardAntSpeedMultiplier = 2f;
+    [Range(0.01f, 1f)]
+    [SerializeField] private float fastForwardSpawnIntervalMultiplier = .5f;
+
     private List<Ant> listOfAnts = new();
+    public bool FastForwardActive => boxManager != null && boxManager.FastForward;
+    public float AntSpeedMultiplier => FastForwardActive ? fastForwardAntSpeedMultiplier : 1f;
+    public float SpawnIntervalMultiplier => FastForwardActive ? fastForwardSpawnIntervalMultiplier : 1f;
 
     void Awake() {
         if (Instance != null && Instance != this) {
@@ -20,6 +31,10 @@ public class Ants : MonoBehaviour
 
         if (navigation == null) {
             navigation = FindAnyObjectByType<SpaceNavigation>();
+        }
+
+        if (boxManager == null) {
+            boxManager = FindAnyObjectByType<BoxManagementSystem>();
         }
     }
 

@@ -26,16 +26,19 @@ public class AdministrationHandler : MonoBehaviour
     [SerializeField] private Button addBoxButton;
     [SerializeField] private Button deleteColorBoxButton; //testing only
 
+    [Header("Input Field")]
+    [SerializeField] private TMP_InputField columnInput;
+
 
     public EditorState State { get; private set; } = EditorState.Basic;
-    public bool link;
+    [HideInInspector] public bool link;
 
     void Awake() {
         //MODES
         drawMode.onClick.AddListener(() => ChangeMode(EditorState.Drawing));
 
-        boxConfig.LinkState += () => {
-            link = true;
+        boxConfig.LinkState += (sourceBox) => {
+            link = sourceBox != null;
         };
 
         deleteColorBoxButton.onClick.AddListener(() => {
@@ -48,6 +51,11 @@ public class AdministrationHandler : MonoBehaviour
         addBoxButton.onClick.AddListener(() => {
             boxManager.Add();
             Log();
+        });
+
+        columnInput.onEndEdit.AddListener((value) => {
+            if (!int.TryParse(value, out var amount)) return;
+            boxManager.SetColumns(amount);
         });
 
     }
@@ -95,18 +103,16 @@ public class AdministrationHandler : MonoBehaviour
             link = false;
             return;
         }
+        boxConfig.Deselection();
+        link = false;
 
         boxConfig.gameObject.SetActive(true);
         boxConfig.Init(box);
     }
 
-
-
-
     //COMMONS
 
     public void ResetConfig() {
-        boxConfig.Deselection();
 
         ResetConfigPanel();
     }

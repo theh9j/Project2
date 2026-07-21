@@ -284,6 +284,36 @@ public class MapCoordination : MonoBehaviour {
 
         PixelView pixelView = GetPixel(x, y);
         pixelView?.ChangeColor(color, colorData.GetColor(color));
+        navigationDirty = true;
+    }
+
+    public void ApplySavedMap(MapSaveData savedMap) {
+        if (savedMap == null) return;
+
+        RebuildGrid();
+        SetAllPixels(savedMap.defaultColor);
+
+        foreach (PixelSaveData pixel in savedMap.pixels) {
+            SetPixelColor(pixel.x, pixel.y, pixel.color);
+        }
+
+        if (savedMap.columns != columns || savedMap.rows != rows) {
+            WarningMessage.Instance?.Warn(
+                $"WARN | Saved map is {savedMap.columns}x{savedMap.rows}, current frame generated {columns}x{rows}.");
+        }
+    }
+
+    private void SetAllPixels(ColorType color) {
+        if (pixelGrid == null) return;
+
+        for (int y = 0; y < rows; y++) {
+            for (int x = 0; x < columns; x++) {
+                PixelView pixelView = GetPixel(x, y);
+                pixelView?.ChangeColor(color, colorData.GetColor(color));
+            }
+        }
+
+        navigationDirty = true;
     }
 
     public Dictionary<ColorType, int> GetPixelColorCount() {
@@ -328,8 +358,6 @@ public class MapCoordination : MonoBehaviour {
             pixelGrid == null) return false;
 
         PixelView pixel = pixelGrid[grid.x, grid.y];
-        // A null entry means its pixel GameObject has already been removed.
-        // It remains a valid grid cell and must behave exactly like None.
         return pixel == null ||
                pixel.Color == ColorType.None ||
                pixel.IsPickedUp;
@@ -345,11 +373,6 @@ public class MapCoordination : MonoBehaviour {
         return GetCellWorldPosition(grid.x, grid.y);
     }
 
-    /// <summary>
-    /// Performs one flood-fill for the current map and returns every matching
-    /// exposed pixel with its best tray opening. This replaces the previous
-    /// per-candidate flood-fill used during ant spawning.
-    /// </summary>
     public List<ExposedTarget> GetAvailableExposedTargets(ColorType color) {
         List<ExposedTarget> results = new();
         if (pixelGrid == null || columns <= 0 || rows <= 0) return results;
@@ -582,6 +605,14 @@ public class MapCoordination : MonoBehaviour {
         if (hole == null) return false;
 
         return TryGetRectWorldBounds(hole, out bounds);
+    }
+
+    public bool GetPositionOfHole(out Vector3 holePosition) {
+        holePosition = new Vector3();
+        if (hole == null) return false;
+
+        holePosition = hole.position;
+        return holePosition != Vector3.zero;
     }
 
     private void TrySeedOpening(

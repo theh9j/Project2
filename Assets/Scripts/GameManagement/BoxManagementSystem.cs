@@ -5,28 +5,51 @@ using UnityEngine;
 
 public class BoxManagementSystem : MonoBehaviour
 {
-    private const int MAX = 5;
-
     [Header("Settings")]
     [SerializeField] private float moveSpeed = 0.01f;
+    [Range(1, 4)]
+    [SerializeField] private int columns = 4;
 
     [Header("Layout")]
     [SerializeField] private Transform boxParent;
     [SerializeField] private float xSpacing = 2f;
     [SerializeField] private float ySpacing = 1.5f;
 
-    private readonly List<Box>[] boxes = new List<Box>[MAX];
+    private readonly List<List<Box>> boxes = new();
     [SerializeField] private GameObject prefab;
 
     [Min(1)]
     [SerializeField] private float scrollRowsPerStep = 1f;
     private float rowScrollOffset;
     private bool refreshQueued;
+    public bool FastForward => BoxList.Count == 0;
+    public int Columns => columns;
 
     void Awake() {
-        for (int i = 0; i < MAX; i++) {
-            boxes[i] = new();
+        SetColumns(columns);
+    }
+
+    public void SetColumns(int amounts) {
+        int newColumnCount = Mathf.Max(1, amounts);
+        if (newColumnCount == boxes.Count) return;
+
+        while (boxes.Count < newColumnCount) {
+            boxes.Add(new());
         }
+
+        while (boxes.Count > newColumnCount) {
+            int removedColumnIndex = boxes.Count - 1;
+            List<Box> removedColumn = boxes[removedColumnIndex];
+            boxes.RemoveAt(removedColumnIndex);
+
+            foreach (Box box in removedColumn) {
+                GetShortestColumn().Add(box);
+            }
+        }
+
+        columns = newColumnCount;
+        RefreshLayout();
+
     }
 
     public void Remove(Box box) {
@@ -43,7 +66,7 @@ public class BoxManagementSystem : MonoBehaviour
         if (prefab == null) return;
         GameObject box = Instantiate(prefab);
 
-        for (int i = 1; i < boxes.Length - 1; i++) {
+        for (int i = 1; i < boxes.Count; i++) {
             colIndex = boxes[i].Count < boxes[colIndex].Count ? i : colIndex;
         }
         Add(box.GetComponent<Box>(), colIndex);
@@ -58,9 +81,7 @@ public class BoxManagementSystem : MonoBehaviour
 
         box.transform.SetParent(boxParent, false);
         box.SetCol(colIndex);
-        box.Finished += (value) => {
-            Remove(value);
-        };
+        RegisterBoxEvents(box);
 
         RefreshLayout();
     }
@@ -69,7 +90,7 @@ public class BoxManagementSystem : MonoBehaviour
         if (box == null) return;
         box.SetGridPosition(1000, 1000); // fall back
 
-        for (int i = 0; i < MAX; i++) {
+        for (int i = 0; i < boxes.Count; i++) {
             if (!boxes[i].Remove(box)) continue;
 
             QueueRefreshLayout();
@@ -104,6 +125,38 @@ public class BoxManagementSystem : MonoBehaviour
 
         box.transform.SetParent(boxParent, false);
         box.SetCol(colIndex);
+        RegisterBoxEvents(box);
+        RefreshLayout();
+    }
+
+    public Box CreateBox(int colIndex, int rowIndex) {
+        if (prefab == null) return null;
+        if (!IsValidColumn(colIndex)) return null;
+
+        GameObject boxObject = Instantiate(prefab);
+        if (!boxObject.TryGetComponent(out Box box)) {
+            Destroy(boxObject);
+            return null;
+        }
+
+        InsertBox(box, colIndex, rowIndex);
+        return box;
+    }
+
+    public void ClearBoxes() {
+        foreach (Box box in BoxList) {
+            if (box == null) continue;
+
+            box.transform.DOKill();
+            Destroy(box.gameObject);
+        }
+
+        foreach (List<Box> boxColumn in boxes) {
+            boxColumn.Clear();
+        }
+
+        rowScrollOffset = 0f;
+        refreshQueued = false;
     }
 
     private void RefreshLayout() {
@@ -134,7 +187,8 @@ public class BoxManagementSystem : MonoBehaviour
             float yPos = -(i - rowScrollOffset) * ySpacing;
 
             box.transform.DOKill();
-            box.transform.DOLocalMove(
+
+            box.inColMovement = box.transform.DOLocalMove(
                 new Vector3(xPos, yPos, 0f),
                 moveSpeed
                 )
@@ -155,7 +209,7 @@ public class BoxManagementSystem : MonoBehaviour
     private List<int> GetActiveColsIndicies() {
         List<int> activeCols = new();
 
-        for (int i = 0; i < boxes.Length; i++) {
+        for (int i = 0; i < boxes.Count; i++) {
             RemoveNulls(boxes[i]);
             if (boxes[i].Count == 0) continue;
             activeCols.Add(i);
@@ -168,7 +222,16 @@ public class BoxManagementSystem : MonoBehaviour
     }
 
     private bool IsValidColumn(int colIndex) {
-        return colIndex >= 0 && colIndex < MAX;
+        return colIndex >= 0 && colIndex < boxes.Count;
+    }
+
+    private void RegisterBoxEvents(Box box) {
+        box.Finished += (value) => {
+            Remove(value);
+        };
+        box.Elevated += () => {
+            RemoveBox(box);
+        };
     }
 
     public List<Box> BoxList {
@@ -215,7 +278,7 @@ public class BoxManagementSystem : MonoBehaviour
 
     private void ClampScrollOffset() {
         int largestRowCount = 0;
-        for (int i = 0; i < MAX; i++) {
+        for (int i = 0; i < boxes.Count; i++) {
             largestRowCount = Mathf.Max(
                 largestRowCount,
                 boxes[i].Count
@@ -244,5 +307,17 @@ public class BoxManagementSystem : MonoBehaviour
 
         refreshQueued = false;
         RefreshLayout();
+    }
+
+    private List<Box> GetShortestColumn() {
+        List<Box> shortestColumn = boxes[0];
+
+        for (int i = 1; i < boxes.Count; i++) {
+            if (boxes[i].Count >= shortestColumn.Count) continue;
+
+            shortestColumn = boxes[i];
+        }
+
+        return shortestColumn;
     }
 }

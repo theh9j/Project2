@@ -33,7 +33,7 @@ public class WaitingLine : MonoBehaviour
         box.transform.SetParent(transform, true);
         if (boxPoint == null) return;
 
-        box.transform.DOKill();
+        box.inColMovement?.Kill();
         box.transform.DOMove(
             boxPoint.position,
             .2f

@@ -120,54 +120,64 @@ public class WaitingSlotsManagementSystem : MonoBehaviour
         }
     }
 
-    public bool AddBoxToAvailablePlate(Box box) {
-        if (box == null || !box.Interactable) return false;
+    public void AddBoxToAvailablePlate(Box box) {
+        if (box == null || !box.Interactable) return;
 
         SyncPlateList();
 
         if (box.Link != null) {
-            return AddLinkedBoxToAvailablePlates(box);
+            AddLinkedBoxToAvailablePlates(box);
+            return;
         }
 
         WaitingLine availablePlate = FindFirstAvailablePlate();
-        if (availablePlate == null) return false;
+        if (availablePlate == null) return;
 
         box.Finished += (value) => {
             boxes.Remove(value);
         };
         boxes.Add(box);
         availablePlate.Add(box);
-        return true;
+        box.OnElevate();
     }
 
-    private bool AddLinkedBoxToAvailablePlates(Box box) {
+    private void AddLinkedBoxToAvailablePlates(Box box) {
         Box linkedBox = box.Link;
-        if (linkedBox == null || !linkedBox.Interactable) return false;
+        if (linkedBox == null || !linkedBox.Interactable) return;
 
         if (!TryFindAdjacentAvailablePlates(
                 out WaitingLine firstPlate,
                 out WaitingLine secondPlate)) {
-            Reorder();
+            int u = 0;
+            for (int i = 0; i < plates.Count; i++) {
+                if (plates[i].Available) {
+                    u++;
+                }
+                if (u == 2) {
+                    Reorder();
+                    break;
+                }
+            }
             TryFindAdjacentAvailablePlates(
                 out firstPlate,
                 out secondPlate);
         }
 
-        if (firstPlate == null || secondPlate == null) return false;
+        if (firstPlate == null || secondPlate == null) return;
 
         box.Finished += (value) => {
             boxes.Remove(value);
         };
         boxes.Add(box);
         firstPlate.Add(box);
+        box.OnElevate();
 
         linkedBox.Finished += (value) => {
             boxes.Remove(value);
         };
         boxes.Add(linkedBox);
         secondPlate.Add(linkedBox);
-
-        return true;
+        linkedBox.OnElevate();
     }
 
     private WaitingLine FindFirstAvailablePlate() {

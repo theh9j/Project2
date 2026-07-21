@@ -21,7 +21,12 @@ public partial class Box : MonoBehaviour
         if (Amount <= 0) return;
         t += Time.deltaTime;
 
-        if (t > timeTilAnt) {
+        float spawnIntervalMultiplier = Ants.Instance != null ?
+            Ants.Instance.SpawnIntervalMultiplier :
+            1f;
+
+        float spawnInterval = Mathf.Max(.01f, timeTilAnt * spawnIntervalMultiplier);
+        if (t > spawnInterval) {
             if (Random.Range(0, change) != 1) {
                 if (OnAntSpawn()) {
                     Decrease(1);
@@ -67,8 +72,8 @@ public partial class Box : MonoBehaviour
         if (Amount > 0) return;
         if (Link != null && Link.Amount > 0) return;
 
-        Animation(BoxAnimationState.Killed);
         Link?.Animation(BoxAnimationState.Killed);
+        Animation(BoxAnimationState.Killed);
     }
 
 }

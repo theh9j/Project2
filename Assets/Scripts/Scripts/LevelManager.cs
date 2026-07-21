@@ -1,63 +1,193 @@
-using NUnit.Framework;
-using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 
-public class LevelManager : MonoBehaviour
-{
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
+public class LevelManager : MonoBehaviour {
+    private const int CurrentVersion = 1;
+    private const string ResourceFolder = "Levels";
 
     [SerializeField] private MapCoordination map;
     [SerializeField] private BoxManagementSystem boxMana;
-    private const string path = "Levels/";
+    [Min(1)]
+    [SerializeField] private int currentLevel = 1;
 
-    private string GetLevelSave(int level) {
-        return path + $"level_{level.ToString("D2")}";
+    private string GetLevelId(int level) {
+        return $"level_{level:D2}";
     }
 
+    private string GetLevelResourcePath(int level) {
+        return $"{ResourceFolder}/{GetLevelId(level)}";
+    }
 
     public void LoadLevel() {
+        LoadLevel(currentLevel);
+    }
 
+    public void LoadLevel(int level) {
+        if (map == null || boxMana == null) {
+            WarningMessage.Instance?.Warn("CRIT | LevelManager references are missing.");
+            return;
+        }
+
+        TextAsset levelJson = Resources.Load<TextAsset>(GetLevelResourcePath(level));
+        if (levelJson == null) {
+            WarningMessage.Instance?.Warn($"ERR | Could not load {GetLevelResourcePath(level)}.");
+            return;
+        }
+
+        LevelSaveData levelData = JsonUtility.FromJson<LevelSaveData>(levelJson.text);
+        if (levelData == null) {
+            WarningMessage.Instance?.Warn("ERR | Level JSON is invalid.");
+            return;
+        }
+
+        ApplyLevel(levelData);
+        currentLevel = level;
     }
 
     public void SaveLevel() {
-#if !UNITY_EDITOR
-        return;
-#endif
-
-        LevelData levelData = new();
-        List<PixelView> pixelArt = map.GetMapLayout();
-        List<Box> boxes = boxMana.BoxList;
-
-        if (pixelArt == null) {
-            WarningMessage.Instance?.Warn("CRIT | Map layout doesn't exist");
-            return;
-        }
-
-        if (boxes == null) {
-            WarningMessage.Instance?.Warn("CRIT | No box on the map");
-            return;
-        }
-
-        levelData.pixels = new();
-        for (int i = 0; i < pixelArt.Count; i++) {
-
-            levelData.pixels[i].id = i;
-            levelData.pixels[i].color = pixelArt[i].Color;
-            levelData.pixels[i].mysterious = pixelArt[i].Mysterious;
-
-        }
-
-        levelData.boxes = new();
-        for (int i = 0; i < boxes.Count; i++) {
-            levelData.boxes[i].id = i;
-            levelData.boxes[i].color = boxes[i].Color;
-            levelData.boxes[i].amount = boxes[i].Amount;
-            levelData.boxes[i].mysterious = boxes[i].Mysterious;
-
-            if (boxes[i].Link != null) {
-
-            }
-        }
+        SaveLevel(currentLevel);
     }
 
+    public void SaveLevel(int level) {
+#if !UNITY_EDITOR
+        return;
+#else
+        if (map == null || boxMana == null) {
+            WarningMessage.Instance?.Warn("CRIT | LevelManager references are missing.");
+            return;
+        }
+
+        LevelSaveData levelData = BuildSaveData(level);
+        string json = JsonUtility.ToJson(levelData, true);
+
+        string directory = Path.Combine(Application.dataPath, "Resources", ResourceFolder);
+        Directory.CreateDirectory(directory);
+
+        string filePath = Path.Combine(directory, $"{GetLevelId(level)}.json");
+        File.WriteAllText(filePath, json);
+        AssetDatabase.Refresh();
+
+        currentLevel = level;
+        WarningMessage.Instance?.Warn($"Saved {GetLevelId(level)}.");
+#endif
+    }
+
+    private LevelSaveData BuildSaveData(int level) {
+        List<PixelView> pixelArt = map.GetMapLayout();
+        List<Box> boxes = boxMana.BoxList;
+        Dictionary<Box, int> boxIds = BuildBoxIds(boxes);
+
+        LevelSaveData levelData = new() {
+            version = CurrentVersion,
+            levelId = GetLevelId(level),
+            boxColumns = boxMana.Columns,
+            map = new MapSaveData {
+                columns = map.Columns,
+                rows = map.Rows,
+                defaultColor = ColorType.None
+            }
+        };
+
+        foreach (PixelView pixel in pixelArt) {
+            if (pixel == null || pixel.Color == ColorType.None) continue;
+
+            Vector2Int grid = pixel.GridPosition;
+            levelData.map.pixels.Add(new PixelSaveData {
+                x = grid.x,
+                y = grid.y,
+                color = pixel.Color
+            });
+        }
+
+        foreach (Box box in boxes) {
+            if (box == null) continue;
+
+            BoxSaveData boxData = new() {
+                id = boxIds[box],
+                color = box.Color,
+                amount = box.Amount,
+                mysterious = box.Mysterious,
+                column = box.ColIndex,
+                row = box.RowIndex,
+                linkId = TryGetBoxId(boxIds, box.Link)
+            };
+
+            levelData.boxes.Add(boxData);
+        }
+
+        return levelData;
+    }
+
+    private void ApplyLevel(LevelSaveData levelData) {
+        boxMana.ClearBoxes();
+        map.ApplySavedMap(levelData.map);
+
+        int neededColumns = Mathf.Max(1, levelData.boxColumns);
+        foreach (BoxSaveData boxData in levelData.boxes) {
+            neededColumns = Mathf.Max(neededColumns, boxData.column + 1);
+        }
+
+        boxMana.SetColumns(neededColumns);
+
+        Dictionary<int, Box> loadedBoxes = new();
+        foreach (BoxSaveData boxData in levelData.boxes) {
+            Box box = boxMana.CreateBox(boxData.column, boxData.row);
+            if (box == null) continue;
+
+            box.ApplySavedState(
+                boxData.color,
+                boxData.amount,
+                boxData.mysterious);
+
+            loadedBoxes[boxData.id] = box;
+        }
+
+        RestoreLinks(levelData.boxes, loadedBoxes);
+    }
+
+    private Dictionary<Box, int> BuildBoxIds(List<Box> boxes) {
+        Dictionary<Box, int> ids = new();
+
+        for (int i = 0; i < boxes.Count; i++) {
+            Box box = boxes[i];
+            if (box == null || ids.ContainsKey(box)) continue;
+
+            ids[box] = ids.Count;
+        }
+
+        return ids;
+    }
+
+    private int TryGetBoxId(Dictionary<Box, int> boxIds, Box box) {
+        if (box == null) return -1;
+        return boxIds.TryGetValue(box, out int id) ? id : -1;
+    }
+
+    private void RestoreLinks(
+        List<BoxSaveData> boxData,
+        Dictionary<int, Box> loadedBoxes) {
+        HashSet<int> linkedBoxes = new();
+
+        foreach (BoxSaveData data in boxData) {
+            if (data.linkId < 0) continue;
+            if (linkedBoxes.Contains(data.id)) continue;
+            if (!loadedBoxes.TryGetValue(data.id, out Box box)) continue;
+            if (!loadedBoxes.TryGetValue(data.linkId, out Box linkedBox)) continue;
+
+            box.Link = linkedBox;
+            linkedBox.Link = box;
+
+            Link linkLine = box.CreateLinkLine();
+            box.linkLine = linkLine;
+            linkedBox.linkLine = linkLine;
+
+            linkedBoxes.Add(data.id);
+            linkedBoxes.Add(data.linkId);
+        }
+    }
 }

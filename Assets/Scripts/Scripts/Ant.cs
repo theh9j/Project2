@@ -139,16 +139,20 @@ public class Ant : MonoBehaviour
         }
 
         Vector3 direction = offset.normalized;
+        float speedMultiplier = Ants.Instance != null ?
+            Ants.Instance.AntSpeedMultiplier :
+            1f;
+
         transform.position = Vector3.MoveTowards(
             transform.position,
             destination,
-            moveSpeed * Time.deltaTime);
+            moveSpeed * speedMultiplier * Time.deltaTime);
 
         Quaternion targetRotation = Quaternion.LookRotation(Vector3.forward, direction);
         transform.rotation = Quaternion.RotateTowards(
             transform.rotation,
             targetRotation,
-            turnSpeed * Time.deltaTime);
+            turnSpeed * speedMultiplier * Time.deltaTime);
     }
 
     private void TryPickUpTarget() {
@@ -159,5 +163,4 @@ public class Ant : MonoBehaviour
             Carry(TargetPixel);
         }
     }
-
 }

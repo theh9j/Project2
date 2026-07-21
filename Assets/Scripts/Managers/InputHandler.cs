@@ -130,8 +130,7 @@ public class InputHandler : MonoBehaviour
 
         Box box = hit.collider.GetComponent<Box>();
         if (box != null && box.Interactable) {
-            if (waitManager.AddBoxToAvailablePlate(box))
-                boxManager.RemoveBox(box);
+            waitManager.AddBoxToAvailablePlate(box);
         }
     }
 

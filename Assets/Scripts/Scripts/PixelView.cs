@@ -68,15 +68,10 @@ public class PixelView : MonoBehaviour
     public void MarkPickedUp() {
         IsPickedUp = true;
         IsReserved = false;
-        // Vacate the original grid coordinate immediately. The carried
-        // GameObject may continue existing until it reaches the hole, but it
-        // must no longer block pixels behind it.
         map?.VacateCell(this);
     }
 
     private void OnDestroy() {
-        // Also invalidate the cache when a pixel is removed by a path other
-        // than the normal pickup flow.
         map?.VacateCell(this);
     }
 
