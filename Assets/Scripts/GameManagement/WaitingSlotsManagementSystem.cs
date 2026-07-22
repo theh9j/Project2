@@ -1,10 +1,13 @@
 using DG.Tweening;
 using System.Collections.Generic;
+using System.Linq;
 using Unity.VisualScripting;
 using UnityEngine;
 
 public class WaitingSlotsManagementSystem : MonoBehaviour
 {
+    public static WaitingSlotsManagementSystem Instance;
+
     [SerializeField] private GameObject platePrefab;
     [SerializeField] private Camera cam;
     [SerializeField] private MapCoordination map;
@@ -22,8 +25,17 @@ public class WaitingSlotsManagementSystem : MonoBehaviour
     [SerializeField] private List<GameObject> existingPlates = new();
     private readonly List<WaitingLine> plates = new();
     private List<Box> boxes = new();
+    public int ActivePlateCount => plates.Where(p => !p.Available).ToList().Count;
+    public int PlateCount => plates.Count;
 
     private void Awake() {
+        if (Instance != null && Instance != this) {
+            Destroy(gameObject);
+            return;
+        }
+
+        Instance = this;
+
         if (cam == null) {
             cam = Camera.main;
         }
@@ -90,6 +102,10 @@ public class WaitingSlotsManagementSystem : MonoBehaviour
     private float GetCameraCenterX() {
         float distanceFromCamera = Mathf.Abs(transform.position.z - cam.transform.position.z);
         return cam.ViewportToWorldPoint(new Vector3(.5f, .5f, distanceFromCamera)).x;
+    }
+
+    public void ClearAllPlates() {
+        ClearPlate(plates.Count);
     }
 
     public void ClearPlate(int amount = 1) {

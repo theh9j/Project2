@@ -15,7 +15,7 @@ public class Ants : MonoBehaviour
     [SerializeField] private float fastForwardAntSpeedMultiplier = 2f;
     [Range(0.01f, 1f)]
     [SerializeField] private float fastForwardSpawnIntervalMultiplier = .5f;
-
+    public event Action NoAnts;
     private List<Ant> listOfAnts = new();
     public bool FastForwardActive => boxManager != null && boxManager.FastForward;
     public float AntSpeedMultiplier => FastForwardActive ? fastForwardAntSpeedMultiplier : 1f;
@@ -57,6 +57,8 @@ public class Ants : MonoBehaviour
         ant.Finished += (a) => {
             listOfAnts.Remove(a);
             Destroy(a.gameObject);
+
+            if (listOfAnts.Count == 0) NoAnts.Invoke();
         };
     }
 
@@ -69,4 +71,6 @@ public class Ants : MonoBehaviour
             ant.OnComplete();
         }
     }
+
+    public int GetAntCount => listOfAnts.Count;
 }

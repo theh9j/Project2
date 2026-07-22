@@ -168,8 +168,8 @@ public partial class Box : MonoBehaviour
     }
 
     public void SetGridPosition(int x, int y) {
+        if (y == 0 || y == 1000) SetMysterize(false);
         if (RowIndex != 0 && y == 0) {
-            SetMysterize(false);
             Animation(BoxAnimationState.Enable);
         }
         ColIndex = x;

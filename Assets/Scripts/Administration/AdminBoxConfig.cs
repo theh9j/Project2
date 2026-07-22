@@ -58,6 +58,7 @@ public class AdminBoxConfig : MonoBehaviour
         amountInput.onEndEdit.AddListener((value) => {
             if (selectedBox == null) return;
             if (int.TryParse(value, out int amount)) selectedBox.SetAmount(amount);
+            handler.Log();
         });
 
         deleteButton.onClick.AddListener(() => {
@@ -68,7 +69,7 @@ public class AdminBoxConfig : MonoBehaviour
 
         mysterize.onClick.AddListener(() => {
             if (selectedBox == null) return;
-            selectedBox.SetMysterize(true);
+            selectedBox.SetMysterize(!selectedBox.Mysterious);
         });
 
         addToPlate.onClick.AddListener(() => {

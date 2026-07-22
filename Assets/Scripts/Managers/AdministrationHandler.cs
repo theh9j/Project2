@@ -14,6 +14,7 @@ public class AdministrationHandler : MonoBehaviour
     [SerializeField] private MapCoordination map;
     [SerializeField] private ColorData colorData;
     [SerializeField] private TMP_Text activeMode;
+    [SerializeField] private LevelManager levelMana;
 
     [Header("Modes")]
     [SerializeField] private Button drawMode;
@@ -28,6 +29,16 @@ public class AdministrationHandler : MonoBehaviour
 
     [Header("Input Field")]
     [SerializeField] private TMP_InputField columnInput;
+
+    [Header("Level Management")]
+    [SerializeField] private Button save;
+    [SerializeField] private Button load;
+    [SerializeField] private TMP_InputField levelIndex;
+
+    [SerializeField] private TMP_InputField coins;
+    [SerializeField] private TMP_InputField bAdd;
+    [SerializeField] private TMP_InputField bCherry;
+    [SerializeField] private TMP_InputField bClearer;
 
 
     public EditorState State { get; private set; } = EditorState.Basic;
@@ -56,6 +67,30 @@ public class AdministrationHandler : MonoBehaviour
         columnInput.onEndEdit.AddListener((value) => {
             if (!int.TryParse(value, out var amount)) return;
             boxManager.SetColumns(amount);
+        });
+
+
+        save.onClick.AddListener(() => {
+            if (!int.TryParse(levelIndex.text, out int level)) return;
+            levelMana.SaveLevel(level,
+                int.TryParse(coins.text, out int coin) ? coin : null,
+                int.TryParse(bAdd.text, out int add) ? add : null,
+                int.TryParse(bCherry.text, out int cherry) ? cherry : null,
+                int.TryParse(bClearer.text, out int clearer) ? clearer : null
+                );
+        });
+
+        load.onClick.AddListener(() => {
+            if (!int.TryParse(levelIndex.text, out int level)) return;
+            levelMana.LoadLevel(level);
+
+            coins.text = levelMana.Data.rewards.coins.ToString();
+            bAdd.text = levelMana.Data.rewards.bAdd.ToString();
+            bCherry.text = levelMana.Data.rewards.bCherry.ToString();
+            bClearer.text = levelMana.Data.rewards.bClearer.ToString();
+
+            Log();
+
         });
 
     }

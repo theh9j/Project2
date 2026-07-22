@@ -12,8 +12,12 @@ public class LevelManager : MonoBehaviour {
 
     [SerializeField] private MapCoordination map;
     [SerializeField] private BoxManagementSystem boxMana;
-    [Min(1)]
-    [SerializeField] private int currentLevel = 1;
+    [Min(0)]
+    [SerializeField] private int currentLevel;
+    [Min(0)]
+    [SerializeField] private int fallBackLevel = 0;
+    private LevelSaveData levelData = new();
+    public LevelSaveData Data => levelData;
 
     private string GetLevelId(int level) {
         return $"level_{level:D2}";
@@ -23,11 +27,9 @@ public class LevelManager : MonoBehaviour {
         return $"{ResourceFolder}/{GetLevelId(level)}";
     }
 
-    public void LoadLevel() {
-        LoadLevel(currentLevel);
-    }
+    public void LoadLevel(int? levelInput = null) {
+        int level = levelInput ?? fallBackLevel;
 
-    public void LoadLevel(int level) {
         if (map == null || boxMana == null) {
             WarningMessage.Instance?.Warn("CRIT | LevelManager references are missing.");
             return;
@@ -39,7 +41,7 @@ public class LevelManager : MonoBehaviour {
             return;
         }
 
-        LevelSaveData levelData = JsonUtility.FromJson<LevelSaveData>(levelJson.text);
+        levelData = JsonUtility.FromJson<LevelSaveData>(levelJson.text);
         if (levelData == null) {
             WarningMessage.Instance?.Warn("ERR | Level JSON is invalid.");
             return;
@@ -53,7 +55,11 @@ public class LevelManager : MonoBehaviour {
         SaveLevel(currentLevel);
     }
 
-    public void SaveLevel(int level) {
+    public void SaveLevel(int level, 
+        int? coins = null, 
+        int? bAdd = null,
+        int? bCherry = null,
+        int? bClearer = null) {
 #if !UNITY_EDITOR
         return;
 #else
@@ -62,7 +68,18 @@ public class LevelManager : MonoBehaviour {
             return;
         }
 
-        LevelSaveData levelData = BuildSaveData(level);
+        if (Ants.Instance?.GetAntCount > 0 || 
+            WaitingSlotsManagementSystem.Instance?.ActivePlateCount > 0) {
+            WarningMessage.Instance?.Warn($"ERR | Cannot save active level, clear boxes & ants");
+            return;
+        }
+
+        levelData = BuildSaveData(level,
+            coins ?? 0,
+            bAdd ?? 0,
+            bCherry ?? 0,
+            bClearer ?? 0);
+
         string json = JsonUtility.ToJson(levelData, true);
 
         string directory = Path.Combine(Application.dataPath, "Resources", ResourceFolder);
@@ -77,27 +94,36 @@ public class LevelManager : MonoBehaviour {
 #endif
     }
 
-    private LevelSaveData BuildSaveData(int level) {
+    private LevelSaveData BuildSaveData(int level,
+        int coins,
+        int bAdd,
+        int bCherry,
+        int bClearer) {
+
         List<PixelView> pixelArt = map.GetMapLayout();
         List<Box> boxes = boxMana.BoxList;
         Dictionary<Box, int> boxIds = BuildBoxIds(boxes);
 
-        LevelSaveData levelData = new() {
-            version = CurrentVersion,
+        levelData = new() {
             levelId = GetLevelId(level),
             boxColumns = boxMana.Columns,
-            map = new MapSaveData {
-                columns = map.Columns,
-                rows = map.Rows,
-                defaultColor = ColorType.None
-            }
+            waitingSlotCount = WaitingSlotsManagementSystem.Instance == null ?
+                5 : WaitingSlotsManagementSystem.Instance.PlateCount,
+
+            rewards = new() {
+                coins = coins,
+                bAdd = bAdd,
+                bCherry = bCherry,
+                bClearer = bClearer
+            },
         };
 
+
         foreach (PixelView pixel in pixelArt) {
-            if (pixel == null || pixel.Color == ColorType.None) continue;
+            if (pixel == null) continue;
 
             Vector2Int grid = pixel.GridPosition;
-            levelData.map.pixels.Add(new PixelSaveData {
+            levelData.pixels.Add(new PixelSaveData {
                 x = grid.x,
                 y = grid.y,
                 color = pixel.Color
@@ -124,8 +150,14 @@ public class LevelManager : MonoBehaviour {
     }
 
     private void ApplyLevel(LevelSaveData levelData) {
+        Ants.Instance?.KillAnts(a => a);
         boxMana.ClearBoxes();
-        map.ApplySavedMap(levelData.map);
+        map.ApplySavedMap(levelData.pixels);
+
+        if (WaitingSlotsManagementSystem.Instance == null) return;
+
+        WaitingSlotsManagementSystem.Instance.ClearAllPlates();
+        WaitingSlotsManagementSystem.Instance.PlateGenerate(levelData.waitingSlotCount);
 
         int neededColumns = Mathf.Max(1, levelData.boxColumns);
         foreach (BoxSaveData boxData in levelData.boxes) {

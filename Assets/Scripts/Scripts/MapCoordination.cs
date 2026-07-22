@@ -287,19 +287,14 @@ public class MapCoordination : MonoBehaviour {
         navigationDirty = true;
     }
 
-    public void ApplySavedMap(MapSaveData savedMap) {
-        if (savedMap == null) return;
+    public void ApplySavedMap(List<PixelSaveData> map) {
+        if (map == null) return;
 
         RebuildGrid();
-        SetAllPixels(savedMap.defaultColor);
+        SetAllPixels(ColorType.Invalid);
 
-        foreach (PixelSaveData pixel in savedMap.pixels) {
+        foreach (PixelSaveData pixel in map) {
             SetPixelColor(pixel.x, pixel.y, pixel.color);
-        }
-
-        if (savedMap.columns != columns || savedMap.rows != rows) {
-            WarningMessage.Instance?.Warn(
-                $"WARN | Saved map is {savedMap.columns}x{savedMap.rows}, current frame generated {columns}x{rows}.");
         }
     }
 
@@ -323,7 +318,7 @@ public class MapCoordination : MonoBehaviour {
         for (int y = 0; y < rows; y++) {
             for (int x = 0; x < columns; x++) {
                 PixelView pixel = GetPixel(x, y);
-                if (pixel == null || pixel.Color == ColorType.None) continue;
+                if (pixel == null || !ShouldCountPixelColor(pixel.Color)) continue;
 
                 listOfPixel.TryGetValue(pixel.Color, out int amount);
                 listOfPixel[pixel.Color] = amount + 1;
@@ -332,6 +327,13 @@ public class MapCoordination : MonoBehaviour {
 
         return listOfPixel;
     }
+
+    private bool ShouldCountPixelColor(ColorType color) {
+        return color != ColorType.None &&
+               color != ColorType.Invalid &&
+               color != ColorType.Unknown;
+    }
+
     public List<PixelView> ExposedPixels {
         get {
             List<PixelView> exposedPixels = new();
