@@ -74,9 +74,7 @@ public partial class Box : MonoBehaviour
             colorData = ColorData.LoadDefault();
         }
         outline.enabled = false;
-    }
 
-    void Start() {
         ChangeColor(baseColor, colorData.GetColor(baseColor));
         SetAmount(Amount);
     }

@@ -30,8 +30,6 @@ public class MapCoordination : MonoBehaviour {
     [Tooltip("World-space margin inside the frame.")]
     [Min(0f)]
     [SerializeField] private float padding = 0.1f;
-
-    [SerializeField] private bool rebuildOnStart = true;
     [SerializeField] private bool fitVisualToPixelSize = true;
 
     private readonly List<GameObject> pixels = new();
@@ -50,12 +48,6 @@ public class MapCoordination : MonoBehaviour {
     public int Columns => columns;
     public int Rows => rows;
     public float CellStep => Mathf.Abs(pixelSize + pixelGap);
-
-    private void Start() {
-        if (rebuildOnStart) {
-            RebuildGrid();
-        }
-    }
 
     public List<PixelView> GetMapLayout() {
         return pixelArt;
@@ -82,6 +74,7 @@ public class MapCoordination : MonoBehaviour {
             WarningMessage.Instance?.Warn("ERR | The frame is too small for the current pixel size.");
             return;
         }
+
 
         pixelParent.localPosition = localCenter;
         pixelParent.localRotation = Quaternion.identity;
@@ -291,7 +284,7 @@ public class MapCoordination : MonoBehaviour {
         if (map == null) return;
 
         RebuildGrid();
-        SetAllPixels(ColorType.Invalid);
+        SetAllPixels(ColorType.None);
 
         foreach (PixelSaveData pixel in map) {
             SetPixelColor(pixel.x, pixel.y, pixel.color);
@@ -318,7 +311,7 @@ public class MapCoordination : MonoBehaviour {
         for (int y = 0; y < rows; y++) {
             for (int x = 0; x < columns; x++) {
                 PixelView pixel = GetPixel(x, y);
-                if (pixel == null || !ShouldCountPixelColor(pixel.Color)) continue;
+                if (pixel == null || !IsVisiblePixelColor(pixel.Color)) continue;
 
                 listOfPixel.TryGetValue(pixel.Color, out int amount);
                 listOfPixel[pixel.Color] = amount + 1;
@@ -328,7 +321,7 @@ public class MapCoordination : MonoBehaviour {
         return listOfPixel;
     }
 
-    private bool ShouldCountPixelColor(ColorType color) {
+    public bool IsVisiblePixelColor(ColorType color) {
         return color != ColorType.None &&
                color != ColorType.Invalid &&
                color != ColorType.Unknown;
@@ -402,6 +395,7 @@ public class MapCoordination : MonoBehaviour {
 
         if (pixelGrid[grid.x, grid.y] != pixel) return;
 
+        pixelArt.Remove(pixel);
         pixelGrid[grid.x, grid.y] = null;
         navigationDirty = true;
     }

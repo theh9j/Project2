@@ -582,7 +582,7 @@ MonoBehaviour:
   bottomLeftLeg: {fileID: 740704478769110786}
   bottomRightLeg: {fileID: 1571079730446709804}
   animator: {fileID: 5537990422235800309}
-  moveSpeed: 1.5
+  moveSpeed: 2
   stoppingDistance: 0.03
   turnSpeed: 720
   pickupDistance: 0.12

@@ -5,6 +5,7 @@ using System.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 public class AdminBoxConfig : MonoBehaviour
@@ -105,6 +106,19 @@ public class AdminBoxConfig : MonoBehaviour
             if (selectedBox == null) return;
             selectedBox.Animation(BoxAnimationState.Killed);
         });
+    }
+
+    void Update() {
+        if (selectedBox == null) return;
+
+        if (Keyboard.current != null) {
+            if (Keyboard.current[Key.S].wasPressedThisFrame) selectedBox.SetMysterize(!selectedBox.Mysterious);
+            if (Keyboard.current[Key.E].wasPressedThisFrame) {
+                linkSource = selectedBox;
+                LinkState?.Invoke(linkSource);
+            }
+            if (Keyboard.current[Key.A].wasPressedThisFrame) waitingSlots.AddBoxToAvailablePlate(selectedBox);
+        }
     }
 
     public void Init(Box box) {

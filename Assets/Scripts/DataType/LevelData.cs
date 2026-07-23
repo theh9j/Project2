@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 [System.Serializable]
 public class LevelSaveData {
-    public string levelId;
+    public int levelId;
     public RewardSaveData rewards = new();
 
     public int boxColumns = 1;

@@ -1,0 +1,31 @@
+{
+    "levelId": -1,
+    "rewards": {
+        "coins": 0,
+        "bAdd": 0,
+        "bCherry": 0,
+        "bClearer": 0
+    },
+    "boxColumns": 3,
+    "waitingSlotCount": 1,
+    "boxes": [
+        {
+            "id": 0,
+            "color": 3,
+            "amount": 1,
+            "column": 0,
+            "row": 0,
+            "mysterious": false,
+            "linkId": -1,
+            "lockId": -1
+        }
+    ],
+    "keys": [],
+    "pixels": [
+        {
+            "x": 24,
+            "y": 42,
+            "color": 3
+        }
+    ]
+}

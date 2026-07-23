@@ -39,12 +39,16 @@ public class SaveManager : MonoBehaviour
         level = PlayerPrefs.GetInt("Level");
         coins = PlayerPrefs.GetInt("Coins");
 
+        bAdd = PlayerPrefs.GetInt("Booster Plate Add");
+        bCherry = PlayerPrefs.GetInt("Booster Cherry Pick");
+        bClearer = PlayerPrefs.GetInt("Booster Color Clearer");
+
         sFX = PlayerPrefs.GetInt("SFX") == 1;
         music = PlayerPrefs.GetInt("Music") == 1;
     }
 
     private void LoadInitialData() {
-        level = 0;
+        level = 1;
         coins = 200;
 
         sFX = true;
@@ -62,6 +66,10 @@ public class SaveManager : MonoBehaviour
     private void SaveData() {
         PlayerPrefs.SetInt("Level", level);
         PlayerPrefs.SetInt("Coins", coins);
+
+        PlayerPrefs.SetInt("Booster Plate Add", bAdd);
+        PlayerPrefs.SetInt("Booster Cherry Pick", bCherry);
+        PlayerPrefs.SetInt("Booster Color Clearer", bClearer);
 
         PlayerPrefs.SetInt("SFX", sFX ? 1 : 0);
         PlayerPrefs.SetInt("Music", music ? 1 : 0);

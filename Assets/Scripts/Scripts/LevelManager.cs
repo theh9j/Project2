@@ -41,6 +41,7 @@ public class LevelManager : MonoBehaviour {
             return;
         }
 
+        levelData = new();
         levelData = JsonUtility.FromJson<LevelSaveData>(levelJson.text);
         if (levelData == null) {
             WarningMessage.Instance?.Warn("ERR | Level JSON is invalid.");
@@ -73,6 +74,7 @@ public class LevelManager : MonoBehaviour {
             WarningMessage.Instance?.Warn($"ERR | Cannot save active level, clear boxes & ants");
             return;
         }
+        levelData = new();
 
         levelData = BuildSaveData(level,
             coins ?? 0,
@@ -105,7 +107,7 @@ public class LevelManager : MonoBehaviour {
         Dictionary<Box, int> boxIds = BuildBoxIds(boxes);
 
         levelData = new() {
-            levelId = GetLevelId(level),
+            levelId = level,
             boxColumns = boxMana.Columns,
             waitingSlotCount = WaitingSlotsManagementSystem.Instance == null ?
                 5 : WaitingSlotsManagementSystem.Instance.PlateCount,
@@ -120,7 +122,7 @@ public class LevelManager : MonoBehaviour {
 
 
         foreach (PixelView pixel in pixelArt) {
-            if (pixel == null) continue;
+            if (pixel == null || !map.IsVisiblePixelColor(pixel.Color)) continue;
 
             Vector2Int grid = pixel.GridPosition;
             levelData.pixels.Add(new PixelSaveData {
