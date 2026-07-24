@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Globalization;
 using TMPro;
 using UnityEngine;
@@ -9,21 +10,47 @@ public class CoinVisualiser : MonoBehaviour
     [SerializeField] private RectTransform coinBackground;
     [SerializeField] private TMP_Text coin;
 
+    [Header("Coin Background Extension")]
     [SerializeField] private int widthOffset;
     [SerializeField] private float initialWidth = 200f;
-    public int CurrentCoins { get; private set; }
+
+    [Header("Coin Add Settings")]
+    [SerializeField] private float coinAddDuration = 5f;
+    [SerializeField] private int maxCoinAddSteps = 120;
 
     void Awake() {
         coinBackground?.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, initialWidth);
     }
 
-    public void AddCoin(int amount) {
-        SetCoin(CurrentCoins + amount);
+    public IEnumerator CoinAdd(int amount) {
+        if (amount <= 0) {
+            yield break;
+        }
+
+        int startCoins = (SaveManager.Instance?.coins ?? 0) - amount;
+        int targetCoins = startCoins + amount;
+        int steps = Mathf.Clamp(amount, 1, maxCoinAddSteps);
+        float stepDuration = coinAddDuration / steps;
+
+        for (int step = 1; step <= steps; step++) {
+            float progress = (float)step / steps;
+            float easedProgress = EaseOutCubic(progress);
+            int displayedCoins = Mathf.RoundToInt(Mathf.Lerp(startCoins, targetCoins, easedProgress));
+
+            SetCoin(displayedCoins);
+            yield return new WaitForSeconds(stepDuration);
+        }
+
+        SetCoin(targetCoins);
+    }
+
+    private float EaseOutCubic(float value) {
+        value = Mathf.Clamp01(value);
+        return 1f - Mathf.Pow(1f - value, 3f);
     }
 
     public void SetCoin(int? amount) {
         int value = amount ?? 0;
-        CurrentCoins = value;
 
         if (coin == null) return;
 

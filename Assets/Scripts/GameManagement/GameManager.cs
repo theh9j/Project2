@@ -1,4 +1,4 @@
-using NUnit.Framework;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -9,6 +9,7 @@ public class GameManager : MonoBehaviour
 
     [Header("READ DESCRIPTION BEFORE TICK"), Tooltip("In order for this to work, Rebuild on start must be disabled on Map")]
     [SerializeField] private bool load;
+    [SerializeField, Min(0f)] private float stateCheckDelay = .35f;
 
     [Header("References")]
     [SerializeField] private MapCoordination map;
@@ -23,6 +24,8 @@ public class GameManager : MonoBehaviour
     [SerializeField] private TextCommon levelText;
     [SerializeField] private CoinVisualiser coinVisualiser;
     [SerializeField] private GameEndVisualiser gameEndVisualiser;
+    private Coroutine stateCheckRoutine;
+    private bool gameEnded;
 
     void Awake() {
         if (Instance != null && Instance != this) {
@@ -36,28 +39,47 @@ public class GameManager : MonoBehaviour
     }
 
     void Start() {
-        ants.NoAnts += CheckForGameCompletion;
+        if (ants != null) ants.NoAnts += QueueGameStateCheck;
         if (load) levelManager.LoadLevel(SaveManager.Instance?.level);
         else map.RebuildGrid();
         coinVisualiser.SetCoin(SaveManager.Instance?.coins);
         levelText.SetText($"Level {SaveManager.Instance?.level.ToString()}");
 
-        gameEndVisualiser.Advance += () => {
+        gameEndVisualiser.LoadLevel += () => {
+            gameEnded = false;
             levelManager.LoadLevel(SaveManager.Instance?.level);
             levelText.SetText($"Level {SaveManager.Instance?.level.ToString()}");
         };
     }
 
+    private void OnDestroy() {
+        if (ants != null) ants.NoAnts -= QueueGameStateCheck;
+    }
+
+    private void QueueGameStateCheck() {
+        if (stateCheckRoutine != null) {
+            StopCoroutine(stateCheckRoutine);
+        }
+
+        stateCheckRoutine = StartCoroutine(CheckGameStateAfterDelay());
+    }
+
+    private IEnumerator CheckGameStateAfterDelay() {
+        yield return new WaitForSeconds(stateCheckDelay);
+
+        stateCheckRoutine = null;
+        CheckForGameCompletion();
+    }
+
     private void CheckForGameCompletion() {
-        if (map.GetMapLayout()
-            .Any(p => p != null 
-            && p.Color != ColorType.None 
-            && p.Color != ColorType.Invalid
-            && p.Color != ColorType.Unknown)) {
+        if (gameEnded) return;
+
+        if (HasRemainingPixels()) {
             CheckForGameFail();
             return;
         }
 
+        gameEnded = true;
         if (SaveManager.Instance == null) levelManager.LoadLevel();
 
         SaveManager.Instance.level += 1;
@@ -72,21 +94,55 @@ public class GameManager : MonoBehaviour
     }
 
     private void CheckForGameFail() {
+        if (ants != null && ants.GetAntCount > 0) return;
+        if (HasReservedPixels()) return;
+        if (HasWaitingBoxThatCanSpawn()) return;
+        if (HasMoveableBox()) return;
+
+        gameEnded = true;
+        gameEndVisualiser.Lose();
+    }
+
+    //HELPERS
+
+    private bool HasRemainingPixels() {
+        if (map == null) return false;
+
+        return map.GetMapLayout()
+            .Any(pixel => pixel != null &&
+                map.IsVisiblePixelColor(pixel.Color));
+    }
+
+    private bool HasReservedPixels() {
+        if (map == null) return false;
+
+        return map.GetMapLayout()
+            .Any(pixel => pixel != null && pixel.IsReserved);
+    }
+
+    private bool HasWaitingBoxThatCanSpawn() {
+        if (waitMana == null || map == null) return false;
+
+        foreach (Box box in waitMana.WaitingBoxes) {
+            if (box == null || !box.HasAntsToRelease) continue;
+            if (!map.IsVisiblePixelColor(box.Color)) continue;
+            if (map.GetAvailableExposedTargets(box.Color).Count == 0) continue;
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool HasMoveableBox() {
+        if (boxMana == null || waitMana == null) return false;
+
         int freeSlots = waitMana.PlateCount - waitMana.ActivePlateCount;
 
-        bool hasMoveableBox = boxMana.BoxList.Any(box =>
+        return boxMana.BoxList.Any(box =>
             box != null &&
             box.Interactable &&
             (box.Link == null ? freeSlots >= 1 : freeSlots >= 2));
-
-        if (hasMoveableBox) return;
-
-        bool hasReservedPixels = map.GetMapLayout().Any(pixel =>
-            pixel != null && pixel.IsReserved);
-
-        if (hasReservedPixels) return;
-
-        Debug.Log("Lost");
     }
 
 }

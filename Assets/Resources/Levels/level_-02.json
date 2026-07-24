@@ -1,0 +1,46 @@
+{
+    "levelId": -2,
+    "rewards": {
+        "coins": 0,
+        "bAdd": 0,
+        "bCherry": 0,
+        "bClearer": 0
+    },
+    "boxColumns": 3,
+    "waitingSlotCount": 2,
+    "boxes": [
+        {
+            "id": 0,
+            "color": 5,
+            "amount": 100,
+            "column": 0,
+            "row": 0,
+            "mysterious": false,
+            "linkId": -1,
+            "lockId": -1
+        },
+        {
+            "id": 1,
+            "color": 3,
+            "amount": 100,
+            "column": 1,
+            "row": 0,
+            "mysterious": false,
+            "linkId": -1,
+            "lockId": -1
+        }
+    ],
+    "keys": [],
+    "pixels": [
+        {
+            "x": 25,
+            "y": 41,
+            "color": 4
+        },
+        {
+            "x": 26,
+            "y": 41,
+            "color": 5
+        }
+    ]
+}

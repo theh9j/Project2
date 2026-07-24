@@ -35,7 +35,12 @@ public enum ColorType {
     Beige,
     Gray,
     Black,
+}
 
+public enum BoosterType {
+    Add,
+    Cherry,
+    Clearer
 }
 
 public enum InputType {

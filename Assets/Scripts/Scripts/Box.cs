@@ -55,6 +55,7 @@ public partial class Box : MonoBehaviour
     [SerializeField] private ColorType baseColor;
     public ColorType Color { get; private set; } = ColorType.White;
     [field: SerializeField, Min(0)] public int Amount { get; private set; } = 100;
+    public bool HasAntsToRelease => !finishing && Amount > 0;
     private UnityEngine.Color boxVisualColor = UnityEngine.Color.white;
     private ColorData colorData;
 

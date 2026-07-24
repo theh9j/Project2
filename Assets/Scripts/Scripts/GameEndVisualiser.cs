@@ -25,10 +25,26 @@ public class GameEndVisualiser : MonoBehaviour
     [SerializeField] private ParticleSystem rightConfetti;
 
     [SerializeField] private float spinSpeed = .15f;
-    [SerializeField] private float coinAddDuration = 1.25f;
-    [SerializeField] private int maxCoinAddSteps = 60;
 
-    public event Action Advance;
+    [Header("Game Lost")]
+    [SerializeField] private GameObject gameLose;
+    [SerializeField] private Transform noMovesText;
+    [SerializeField] private Transform loseButtons;
+    [SerializeField] private Transform loseVisual;
+
+    [SerializeField] private Button revive;
+    [SerializeField] private TMP_Text reviveOptionText;
+
+    [SerializeField] private Button restart;
+
+    private int price; //STC
+    [SerializeField] private string reviveOp1 = "Revive\n<sprite name=\"coin\"> ";
+    [SerializeField] private string reviveOp2 = "Revive\n<sprite name=\"clip\"> Watch Ad";
+
+
+    //Common
+
+    public event Action LoadLevel;
 
     //Background
     [Header("Background")]
@@ -42,18 +58,31 @@ public class GameEndVisualiser : MonoBehaviour
         backgroundImg = background.GetComponent<Image>();
         continueButton.onClick.AddListener(() => StartCoroutine(Continue()));
 
+        revive.onClick.AddListener(() => {
+            if (SaveManager.Instance != null && SaveManager.Instance.coins > price) {
+                SaveManager.Instance.coins -= price;
+            } else PlayAd();
 
+            //Open up slot logic here -> gameManager
+
+        });
+
+        restart.onClick.AddListener(() => {
+            LoadLevel?.Invoke();
+            UndoLoseScreen()
+            .OnComplete(() => AnimateBackground(false));
+        });
     }
 
     void Update() {
         if (gameWin.activeSelf)
             shineSpot.rotation = Quaternion.Euler(0, 0, Time.time * spinSpeed);
 
-
     }
 
     public void Win(LevelSaveData data) {
         if (gameWin.activeSelf) return;
+        GamePause = true;
         thisLevel = data;
         zoom.gameObject.SetActive(false);
         wholeContinueButton.gameObject.SetActive(false);
@@ -86,10 +115,57 @@ public class GameEndVisualiser : MonoBehaviour
 
         levelDisplay.text = $"Level {data.levelId}";
         coinBonus.text = $"+{data.rewards.coins}";
+    }
+
+    public void Lose() {
+        if (gameLose.activeSelf) return;
         GamePause = true;
+
+        if (SaveManager.Instance != null && SaveManager.Instance.coins > price) reviveOptionText.text = reviveOp1 + price;
+        else reviveOptionText.text = reviveOp2;
+
+        SetLoseButtons(true);
+
+        AnimateBackground(true).OnComplete(() => {
+            noMovesText.DOKill();
+            gameLose.SetActive(true);
+
+            DG.Tweening.Sequence seq = DOTween.Sequence();
+
+            seq.Join(noMovesText.DOLocalMoveY(0f, .5f)
+                .From(Screen.height * 1.5f)
+                .SetEase(Ease.OutBack, 1f));
+
+            seq.Join(noMovesText.GetComponent<CanvasGroup>().
+                DOFade(1f, .5f).From(0f));
+
+            seq.Join(loseVisual.DOScale(1f, .5f).From(0f)
+                .SetEase(Ease.OutBack, 2f));
+
+            seq.Append(loseButtons.DOLocalMoveY(0f, .5f)
+                .From(-Screen.height).SetEase(Ease.OutBack, 1f));
+
+        });
+
+    }
+
+    private Tween UndoLoseScreen() {
+        SetLoseButtons(false);
+
+        noMovesText.DOLocalMoveY(Screen.height * 1.5f, .75f)
+            .SetEase(Ease.InBack, 1f);
+
+        noMovesText.GetComponent<CanvasGroup>().
+            DOFade(0f, .5f);
+
+        loseVisual.DOScale(0f, .5f).SetEase(Ease.InBack, 1f);
+
+        return loseButtons.DOLocalMoveY(-Screen.height * 1.5f, .75f).SetEase(Ease.InBack, 1f)
+            .OnComplete(() => gameLose.SetActive(false));
     }
 
     public Tween AnimateBackground(bool open) {
+        backgroundImg.DOKill();
         if (open) {
             return backgroundImg.DOFade(.996f, .5f).From(0f)
                 .OnStart(() => background.SetActive(true));
@@ -105,7 +181,7 @@ public class GameEndVisualiser : MonoBehaviour
 
         backgroundImg.DOFade(1f, 0f);
 
-        Advance?.Invoke();
+        LoadLevel?.Invoke();
 
         zoom.DOKill();
         wholeContinueButton.DOKill();
@@ -123,35 +199,17 @@ public class GameEndVisualiser : MonoBehaviour
         seq.AppendCallback(() => gameWin.SetActive(false));
         seq.Append(AnimateBackground(false));
         
-        yield return CoinAdd(thisLevel.rewards.coins);
+        yield return coinDisplay.CoinAdd(thisLevel.rewards.coins);
     }
 
-    private IEnumerator CoinAdd(int amount) {
-        if (coinDisplay == null || amount <= 0) {
-            yield break;
-        }
-
-
-        int startCoins = coinDisplay.CurrentCoins;
-        int targetCoins = startCoins + amount;
-        int steps = Mathf.Clamp(amount, 1, maxCoinAddSteps);
-        float stepDuration = coinAddDuration / steps;
-
-        for (int step = 1; step <= steps; step++) {
-            float progress = (float)step / steps;
-            float easedProgress = EaseOutCubic(progress);
-            int displayedCoins = Mathf.RoundToInt(Mathf.Lerp(startCoins, targetCoins, easedProgress));
-
-            coinDisplay.SetCoin(displayedCoins);
-            yield return new WaitForSeconds(stepDuration);
-        }
-
-        coinDisplay.SetCoin(targetCoins);
+    private void SetLoseButtons(bool set) {
+        revive.interactable = set;
+        restart.interactable = set;
     }
 
-    private float EaseOutCubic(float value) {
-        value = Mathf.Clamp01(value);
-        return 1f - Mathf.Pow(1f - value, 3f);
+    private void PlayAd() {
+        Debug.Log("Ad played");
+        //this func is a placeholder
     }
 
 }

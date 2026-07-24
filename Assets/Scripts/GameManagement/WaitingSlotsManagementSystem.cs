@@ -27,6 +27,7 @@ public class WaitingSlotsManagementSystem : MonoBehaviour
     private List<Box> boxes = new();
     public int ActivePlateCount => plates.Where(p => !p.Available).ToList().Count;
     public int PlateCount => plates.Count;
+    public IReadOnlyList<Box> WaitingBoxes => boxes;
 
     private void Awake() {
         if (Instance != null && Instance != this) {
